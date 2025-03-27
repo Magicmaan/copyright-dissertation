@@ -10,7 +10,7 @@ from torch import Tensor
 import torch.nn as nn
 
 # TODO
-class AdversarialLoss(nn.module):
+class AdversarialLoss(nn.Module):
     """
         Adversarial loss, optimises to embed watermark within NST features.
         Attempts to fool totalLoss by detecting probability of watermark being present in NST image.
@@ -39,5 +39,4 @@ class AdversarialLoss(nn.module):
         return 0.0
         # return self.bce(styled_image)
 
-def adversarial_loss
     

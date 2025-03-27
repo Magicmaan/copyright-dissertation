@@ -7,7 +7,7 @@ from torch import Tensor
 import torch.nn as nn
 
 
-class WatermarkLoss(nn.module):
+class WatermarkLoss(nn.Module):
     """
         calculate loss between original and extracted watermark using MSE.
     """

@@ -1,9 +1,15 @@
 from torch import Tensor
-from PIL import Image
+import PIL.Image
 from torchvision import transforms
 
 
-def preprocess_image(image: Image) -> Tensor:
+transform = transforms.Compose([
+    transforms.Resize((256, 256)),
+    transforms.Grayscale(),
+    transforms.ToTensor()
+])
+
+def preprocess_image(image: PIL.Image) -> Tensor:
     """
     Preprocess image for neural style transfer.
     
@@ -11,8 +17,11 @@ def preprocess_image(image: Image) -> Tensor:
     
     :return: Preprocessed image tensor.
     """
+    image = image.convert("L")  # Convert image to grayscale
+    image = image.resize((256, 256))  # Resize image to 256x256
+    return convert_image_to_tensor(image)
 
-def convert_image_to_tensor(image: Image) -> Tensor:
+def convert_image_to_tensor(image: PIL.Image) -> Tensor:
     """
     Convert PIL image to tensor.
     
@@ -20,9 +29,9 @@ def convert_image_to_tensor(image: Image) -> Tensor:
     
     :return: Tensor of image.
     """
-    return transforms.to_tensor(image)
+    return transform(image).unsqueeze(0)
 
-def convert_tensor_to_image(tensor: Tensor) -> Image:
+def convert_tensor_to_image(tensor: Tensor) -> PIL.Image:
     """
     Convert tensor to PIL image.
     
@@ -30,4 +39,5 @@ def convert_tensor_to_image(tensor: Tensor) -> Image:
     
     :return: PIL image of tensor.
     """
-    return transforms.ToPILImage()(tensor)
+    transform = transforms.ToPILImage()
+    return transform(tensor.squeeze(0))

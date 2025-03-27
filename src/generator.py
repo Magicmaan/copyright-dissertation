@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class Generator(nn.module):
+class Generator(nn.Module):
     """
     The NN generator model for the program.
     """

@@ -24,7 +24,7 @@ D(I_w) = Discriminator’s confidence that a post-NST image has a watermark.
 from torch import Tensor
 import torch.nn as nn
 
-class DiscriminatorLoss(nn.module):
+class DiscriminatorLoss(nn.Module):
     def __init__(self):
         super(DiscriminatorLoss, self).__init__()
         self.bce = nn.BCELoss()
