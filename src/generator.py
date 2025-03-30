@@ -6,6 +6,7 @@ class Generator(nn.Module):
     """
     The NN generator model for the program.
     """
+
     def __init_(self):
         super(Generator, self).__init__()
 
@@ -24,8 +25,8 @@ class Generator(nn.Module):
     def forward(self, content: torch.Tensor, watermark: any) -> torch.Tensor:
         """
         Forward propagate the input through the generator.
-        @param: content: Content image.
-        @param: watermark: Watermark image.
+        :param: content: Content image.
+        :param: watermark: Watermark image.
 
         :return: Output of the generator
         """

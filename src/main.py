@@ -5,30 +5,32 @@ from torch.optim import Adam
 from torch import Tensor
 import torch.nn as nn
 from util.dctdwt import (
-    embed_watermark_DCT,
-    embed_watermark_DWT,
-    extract_watermark_DCT,
-    extract_watermark_DWT,
+    embedWatermarkDCT,
+    embedWatermarkDWT,
+    extractWatermarkDCT,
+    extractWatermarkDWT,
 )
-from util.debug import display_image_tensors
-from util.texture import convert_image_to_tensor, preprocess_image
+from util.debug import displayImageTensors
+from util.texture import convert_image_to_tensor, preprocessImage
 
 # load assets
-data_path = Path("data")
+DATA_PATH = Path("data")
 
 # load watermark
-watermark: Image = Image.open(data_path / "watermark.jpg")
-assert watermark is not None, "Watermark not found."
+WATERMARK: Image = Image.open(DATA_PATH / "watermark.jpg")
+assert WATERMARK is not None, "Watermark not found."
 
 
 # load content and style images
-contentImages: list[Path] = list(data_path.glob("content/*.jpg"))
-styleImages: list[Path] = list(data_path.glob("style/*.jpg"))
-assert len(contentImages) > 0, "No content images found."
-assert len(styleImages) > 0, "No style images found."
+CONTENT_IMAGES_LIST: list[Path] = [
+    Image.open(image) for image in list(DATA_PATH.glob("content/*.jpg"))
+]
+STYLE_IMAGES_LIST: list[Path] = [
+    Image.open(image) for image in list(DATA_PATH.glob("style/*.jpg"))
+]
+assert len(CONTENT_IMAGES_LIST) > 0, "No content images found."
+assert len(STYLE_IMAGES_LIST) > 0, "No style images found."
 
-contentImages = [Image.open(image) for image in contentImages]
-styleImages = [Image.open(image) for image in styleImages]
 
 model = nn.Sequential(nn.Linear(10, 50), nn.ReLU(), nn.Linear(50, 1))
 
@@ -40,24 +42,24 @@ discriminator_optimiser = Adam(params=model.parameters(), lr=0.001, betas=(0.9, 
 
 
 # hyper parameters for training
-epochs = 100
+EPOCHS = 100
 
-weights = {"watermark": 1, "adversarial": 1, "perceptual": 1}
+WEIGHTS = {"watermark": 1, "adversarial": 1, "perceptual": 1}
 
-watermark_loss = WatermarkLoss()
-adversarial_loss = AdversarialLoss()
-discriminator_loss = DiscriminatorLoss()
-total_loss = TotalLoss(
-    weights["perceptual"], weights["watermark"], weights["adversarial"]
+WATERMARK_LOSS = WatermarkLoss()
+ADVERSARIAL_LOSS = AdversarialLoss()
+DISCRIMINATOR_LOSS = DiscriminatorLoss()
+TOTAL_LOSS = TotalLoss(
+    WEIGHTS["perceptual"], WEIGHTS["watermark"], WEIGHTS["adversarial"]
 )
 
 
 def main():
     print("Hello from copyright-dissertation!")
 
-    watermarkTensor: Tensor = preprocess_image(watermark)
-    contentTensor: Tensor = preprocess_image(contentImages[0])
-    styleTensor: Tensor = preprocess_image(styleImages[0])
+    watermarkTensor: Tensor = preprocessImage(WATERMARK)
+    contentTensor: Tensor = preprocessImage(CONTENT_IMAGES_LIST[0])
+    styleTensor: Tensor = preprocessImage(STYLE_IMAGES_LIST[0])
 
     print(contentTensor)
     print(styleTensor)
@@ -68,25 +70,19 @@ def main():
     DWTAlpha = 1
     DCTAlpha = 1
 
-    watermarkedTensorDWT = embed_watermark_DWT(contentTensor, watermarkTensor, DWTAlpha)
-    extracted_watermarkDWT = extract_watermark_DWT(
-        contentTensor, watermarkedTensorDWT, DWTAlpha
-    )
+    watermarkedDWT = embedWatermarkDWT(contentTensor, watermarkTensor, DWTAlpha)
+    extractedWatermarkDWT = extractWatermarkDWT(contentTensor, watermarkedDWT, DWTAlpha)
 
-    finalDCT = embed_watermark_DCT(
-        watermarkedTensorDWT, extracted_watermarkDWT, DCTAlpha
-    )
-    final_extracted_watermarkDCT = extract_watermark_DCT(
-        contentTensor, finalDCT, DCTAlpha
-    )
+    watermarkedDWT = embedWatermarkDCT(watermarkedDWT, extractedWatermarkDWT, DCTAlpha)
+    extractedWatermarkDCT = extractWatermarkDCT(contentTensor, watermarkedDWT, DCTAlpha)
 
-    display_image_tensors(
+    displayImageTensors(
         contentTensor,
         watermarkTensor,
-        watermarkedTensorDWT,
-        extracted_watermarkDWT,
-        finalDCT,
-        final_extracted_watermarkDCT,
+        watermarkedDWT,
+        extractedWatermarkDWT,
+        watermarkedDWT,
+        extractedWatermarkDCT,
         titles=[
             "Content Image",
             "Watermark",

@@ -3,5 +3,9 @@
 	"editor.formatOnSave": true,
 	"files.exclude": {
 		"**/__pycache__": true
-	}
+	},
+	"github.copilot.chat.codeGeneration.instructions": [
+		{"file": ".github/code-style.md"}
+	],
+	
 }

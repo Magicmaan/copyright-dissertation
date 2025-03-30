@@ -7,8 +7,14 @@ import torchvision.transforms as transforms
 import numpy as np
 
 
-def dwt_torch(image):
-    """Perform Discrete Wavelet Transform (DWT) on a tensor image."""
+def dwt_torch(image) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    """
+    Perform Discrete Wavelet Transform (DWT) on a tensor image.
+
+    :param: image: Image tensor of shape (batch_size, channels, height, width).
+
+    :return: Tuple of tensors (LL, LH, HL, HH) representing the DWT coefficients.
+    """
     # Get shape information
     batch_size, channels, height, width = image.shape
 
@@ -38,8 +44,17 @@ def dwt_torch(image):
     return LL_tensor, LH_tensor, HL_tensor, HH_tensor
 
 
-def idwt_torch(LL, LH, HL, HH):
-    """Perform Inverse Discrete Wavelet Transform (IDWT) on tensors."""
+def idwt_torch(LL, LH, HL, HH) -> Tensor:
+    """
+    Perform Inverse Discrete Wavelet Transform (IDWT) on tensors.
+
+    :param: LL: Low-Low coefficients.
+    :param: LH: Low-High coefficients.
+    :param: HL: High-Low coefficients.
+    :param: HH: High-High coefficients.
+
+    :return: Reconstructed image tensor.
+    """
     # Get shape information
     batch_size, channels, height, width = LL.shape
 
@@ -65,9 +80,15 @@ def idwt_torch(LL, LH, HL, HH):
     return result
 
 
-def embed_watermark_DWT(image: Tensor, watermark: Tensor, alpha=0.1) -> Tensor:
+def embedWatermarkDWT(image: Tensor, watermark: Tensor, alpha=0.1) -> Tensor:
     """
     embeds watermark into image using Discrete Wavelet Transform (DWT)
+
+    :param: image: Image tensor.
+    :param: watermark: Watermark tensor.
+    :param: alpha: Scaling factor for watermark.
+
+    :return: Watermarked image tensor.
     """
     # get dwts of image and watermark
     LL, LH, HL, HH = dwt_torch(image)
@@ -83,7 +104,7 @@ def embed_watermark_DWT(image: Tensor, watermark: Tensor, alpha=0.1) -> Tensor:
             HH_w = HH_w.repeat(1, HH.shape[1], 1, 1)
 
     # embed watermark
-    LL_embedded = LL + alpha * LL_w
+    LL_embedded = LL + alpha * LL_w * 2
     LH_embedded = LH + alpha * LH_w
     HL_embedded = HL + alpha * HL_w
     HH_embedded = HH + alpha * HH_w
@@ -92,14 +113,21 @@ def embed_watermark_DWT(image: Tensor, watermark: Tensor, alpha=0.1) -> Tensor:
     return watermarked
 
 
-def extract_watermark_DWT(
-    original_image: Tensor, watermarked_image: Tensor, alpha=0.1
+def extractWatermarkDWT(
+    originalImage: Tensor, watermarkedImage: Tensor, alpha=0.1
 ) -> Tensor:
+    """
+    Extracts watermark from watermarked image using DWT.
+
+    :param: originalImage: Original image tensor.
+    :param: watermarkedImage: Watermarked image tensor.
+    :param: alpha: Scaling factor for watermark.
+
+    :return: Extracted watermark tensor.
+    """
     # DWT decomposition
-    LL_original, LH_original, HL_original, HH_original = dwt_torch(original_image)
-    LL_watermark, LH_watermark, HL_watermark, HH_watermark = dwt_torch(
-        watermarked_image
-    )
+    LL_original, LH_original, HL_original, HH_original = dwt_torch(originalImage)
+    LL_watermark, LH_watermark, HL_watermark, HH_watermark = dwt_torch(watermarkedImage)
 
     # get coefficients of watermark
     LL_extracted = (LL_watermark - LL_original) / alpha
@@ -111,9 +139,15 @@ def extract_watermark_DWT(
     return extracted
 
 
-def embed_watermark_DCT(image: Tensor, watermark: Tensor, alpha=0.1) -> Tensor:
+def embedWatermarkDCT(image: Tensor, watermark: Tensor, alpha=0.1) -> Tensor:
     """
     embeds watermark into image using Discrete Cosine Transform (DCT)
+
+    :param: image: Image tensor.
+    :param: watermark: Watermark tensor.
+    :param: alpha: Scaling factor for watermark.
+
+    :return: Watermarked image tensor.
     """
     # Get shape information
     batch_size, channels, height, width = image.shape
@@ -148,20 +182,29 @@ def embed_watermark_DCT(image: Tensor, watermark: Tensor, alpha=0.1) -> Tensor:
     return watermarked
 
 
-def extract_watermark_DCT(
-    original_image: Tensor, watermarked_image: Tensor, alpha=0.1
+def extractWatermarkDCT(
+    originalImage: Tensor, watermarkedImage: Tensor, alpha=0.1
 ) -> Tensor:
+    """
+    Extracts watermark from watermarked image using DCT.
+
+    :param: original_image: Original image tensor.
+    :param: watermarked_image: Watermarked image tensor.
+    :param: alpha: Scaling factor for watermark.
+
+    :return: Extracted watermark tensor.
+    """
     # Get shape information
-    batch_size, channels, height, width = original_image.shape
+    batch_size, channels, height, width = originalImage.shape
 
     # Initialize result tensor
-    extracted = torch.zeros_like(original_image)
+    extracted = torch.zeros_like(originalImage)
 
     # Process each channel separately
     for c in range(channels):
         # Extract data for this channel
-        original_np = original_image[:, c].squeeze(0).numpy()
-        watermarked_np = watermarked_image[:, c].squeeze(0).numpy()
+        original_np = originalImage[:, c].squeeze(0).numpy()
+        watermarked_np = watermarkedImage[:, c].squeeze(0).numpy()
 
         # Apply DCT
         original_dct = dct(original_np)

@@ -20,12 +20,12 @@ transform_color = transforms.Compose(
 )
 
 
-def preprocess_image(image: PIL.Image, preserve_color: bool = True) -> Tensor:
+def preprocessImage(image: PIL.Image, preserve_color: bool = True) -> Tensor:
     """
     Preprocess image for neural style transfer.
 
-    @param: image: Image to preprocess.
-    @param: preserve_color: If True, preserves color information.
+    :param: image: Image to preprocess.
+    :param: preserve_color: If True, preserves color information.
 
     :return: Preprocessed image tensor.
     """
@@ -43,8 +43,8 @@ def convert_image_to_tensor(image: PIL.Image, preserve_color: bool = True) -> Te
     """
     Convert PIL image to tensor.
 
-    @param: image: PIL image to convert to tensor.
-    @param: preserve_color: If True, preserves color information.
+    :param: image: PIL image to convert to tensor.
+    :param: preserve_color: If True, preserves color information.
 
     :return: Tensor of image.
     """
@@ -54,11 +54,11 @@ def convert_image_to_tensor(image: PIL.Image, preserve_color: bool = True) -> Te
         return transform_gray(image).unsqueeze(0)
 
 
-def convert_tensor_to_image(tensor: Tensor) -> PIL.Image:
+def imageToTensor(tensor: Tensor) -> PIL.Image:
     """
     Convert tensor to PIL image.
 
-    @param: tensor: Tensor to convert to PIL image.
+    :param: tensor: Tensor to convert to PIL image.
 
     :return: PIL image of tensor.
     """
