@@ -62,8 +62,11 @@ def main():
     print(contentTensor)
     print(styleTensor)
 
-    DCTAlpha = 0.01
-    DWTAlpha = 0.01
+    # DWT DCT alpha values
+    # controls the strength of the watermark
+    # higher values = stronger / more visible watermark
+    DWTAlpha = 1
+    DCTAlpha = 1
 
     watermarkedTensorDWT = embed_watermark_DWT(contentTensor, watermarkTensor, DWTAlpha)
     extracted_watermarkDWT = extract_watermark_DWT(
@@ -84,6 +87,14 @@ def main():
         extracted_watermarkDWT,
         finalDCT,
         final_extracted_watermarkDCT,
+        titles=[
+            "Content Image",
+            "Watermark",
+            "Watermarked Image DWT",
+            "Extracted Watermark DWT",
+            "Final Watermarked Image DCT",
+            "Final Extracted Watermark DCT",
+        ],
     )
 
 
