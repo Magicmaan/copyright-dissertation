@@ -4,8 +4,13 @@ from lossFunctions import *
 from torch.optim import Adam
 from torch import Tensor
 import torch.nn as nn
-from util.dctdwt import embed_watermark_DCT, embed_watermark_DWT, extract_watermark_DCT, extract_watermark_DWT
-from util.debug import  display_image_tensors
+from util.dctdwt import (
+    embed_watermark_DCT,
+    embed_watermark_DWT,
+    extract_watermark_DCT,
+    extract_watermark_DWT,
+)
+from util.debug import display_image_tensors
 from util.texture import convert_image_to_tensor, preprocess_image
 
 # load assets
@@ -25,11 +30,7 @@ assert len(styleImages) > 0, "No style images found."
 contentImages = [Image.open(image) for image in contentImages]
 styleImages = [Image.open(image) for image in styleImages]
 
-model = nn.Sequential(
-   nn.Linear(10, 50),
-   nn.ReLU(),
-   nn.Linear(50, 1)
-)
+model = nn.Sequential(nn.Linear(10, 50), nn.ReLU(), nn.Linear(50, 1))
 
 # generator = Generator()
 # discriminator = Discriminator()
@@ -51,34 +52,39 @@ total_loss = TotalLoss(
 )
 
 
-
-
 def main():
     print("Hello from copyright-dissertation!")
-    
+
     watermarkTensor: Tensor = preprocess_image(watermark)
     contentTensor: Tensor = preprocess_image(contentImages[0])
     styleTensor: Tensor = preprocess_image(styleImages[0])
-    
+
     print(contentTensor)
     print(styleTensor)
-    
-    DCTAlpha = 0.1
-    DWTAlpha = 0.1
-    
-    watermarkedTensorDCT = embed_watermark_DCT(contentTensor, watermarkTensor, DCTAlpha)
-    extracted_watermarkDCT = extract_watermark_DCT(contentTensor, watermarkedTensorDCT,DCTAlpha)
-    
-    finalDWT = embed_watermark_DWT(watermarkedTensorDCT, extracted_watermarkDCT,DWTAlpha)
-    final_extracted_watermarkDWT = extract_watermark_DWT(contentTensor, finalDWT,DWTAlpha)
-    
-    display_image_tensors(contentTensor, 
-                          watermarkTensor, 
-                          watermarkedTensorDCT, 
-                          extracted_watermarkDCT,
-                          
-                          finalDWT,
-                          final_extracted_watermarkDWT)
+
+    DCTAlpha = 0.01
+    DWTAlpha = 0.01
+
+    watermarkedTensorDWT = embed_watermark_DWT(contentTensor, watermarkTensor, DWTAlpha)
+    extracted_watermarkDWT = extract_watermark_DWT(
+        contentTensor, watermarkedTensorDWT, DWTAlpha
+    )
+
+    finalDCT = embed_watermark_DCT(
+        watermarkedTensorDWT, extracted_watermarkDWT, DCTAlpha
+    )
+    final_extracted_watermarkDCT = extract_watermark_DCT(
+        contentTensor, finalDCT, DCTAlpha
+    )
+
+    display_image_tensors(
+        contentTensor,
+        watermarkTensor,
+        watermarkedTensorDWT,
+        extracted_watermarkDWT,
+        finalDCT,
+        final_extracted_watermarkDCT,
+    )
 
 
 if __name__ == "__main__":
