@@ -57,7 +57,7 @@ def extract_watermark_DWT(original_image:Tensor, watermarked_image:Tensor, alpha
     extracted = idwt_torch(torch.zeros_like(LH_extracted), LH_extracted, HL_extracted, HH_extracted)
     return extracted
 
-def embed_watermark_DCT(image:Tensor, watermark:Tensor, alpha=0.05) -> Tensor:
+def embed_watermark_DCT(image:Tensor, watermark:Tensor, alpha=0.1) -> Tensor:
     """
         embeds watermark into image using Discrete Cosine Transform (DCT)
     """

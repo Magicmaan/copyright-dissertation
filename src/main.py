@@ -62,14 +62,23 @@ def main():
     
     print(contentTensor)
     print(styleTensor)
-    watermarkedTensorDCT = embed_watermark_DCT(contentTensor, watermarkTensor)
-    extracted_watermarkDCT = extract_watermark_DCT(contentTensor, watermarkedTensorDCT)
-    watermarkedTensorDWT = embed_watermark_DWT(watermarkedTensorDCT, watermarkTensor)
-    extracted_watermarkDWT = extract_watermark_DWT(contentTensor, watermarkedTensorDWT)
     
+    DCTAlpha = 0.1
+    DWTAlpha = 0.1
     
+    watermarkedTensorDCT = embed_watermark_DCT(contentTensor, watermarkTensor, DCTAlpha)
+    extracted_watermarkDCT = extract_watermark_DCT(contentTensor, watermarkedTensorDCT,DCTAlpha)
     
-    display_image_tensors(contentTensor, watermarkTensor, watermarkedTensorDWT, extracted_watermarkDWT, watermarkedTensorDCT, extracted_watermarkDCT)
+    finalDWT = embed_watermark_DWT(watermarkedTensorDCT, extracted_watermarkDCT,DWTAlpha)
+    final_extracted_watermarkDWT = extract_watermark_DWT(contentTensor, finalDWT,DWTAlpha)
+    
+    display_image_tensors(contentTensor, 
+                          watermarkTensor, 
+                          watermarkedTensorDCT, 
+                          extracted_watermarkDCT,
+                          
+                          finalDWT,
+                          final_extracted_watermarkDWT)
 
 
 if __name__ == "__main__":
