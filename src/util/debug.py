@@ -7,6 +7,20 @@ import matplotlib.pyplot as plt
 from util.texture import convert_tensor_to_image
 
 
+def get_variable_name(var: any) -> str:
+    """
+    Get the variable name as a string.
+
+    @param: var: Variable to get the name of.
+
+    :return: Name of the variable.
+    """
+    for name, value in globals().items():
+        if value is var:
+            return name
+    return "Unknown"
+
+
 def display_image_tensors(*tensors: Tensor, titles: list[str] = None) -> None:
     """
     Display multiple tensors as images.
@@ -15,7 +29,7 @@ def display_image_tensors(*tensors: Tensor, titles: list[str] = None) -> None:
     """
     num_tensors = len(tensors)
     fig, axes = plt.subplots(1, num_tensors, figsize=(num_tensors * 5, 5))
-
+    plt.ion()  # Turn on interactive mode for live updates
     if num_tensors == 1:
         axes = [axes]
 
@@ -31,7 +45,8 @@ def display_image_tensors(*tensors: Tensor, titles: list[str] = None) -> None:
         if titles is not None and titles:
             ax.set_title(titles.pop(0))
         else:
-            ax.set_title("Image")
+            ax.set_title(get_variable_name(tensor))
         ax.axis("off")  # Hide axes for better visualization
 
-    plt.show()
+    plt.show(block=False)  # Show the plot without blocking
+    plt.pause(0.001)  # Pause to allow for live updates
