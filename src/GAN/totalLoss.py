@@ -5,7 +5,7 @@ class TotalLoss(nn.Module):
     """
     Calculate total loss for the program.
 
-    :param: perceptual_weight: Weight for perceptual loss. ( )
+    :param: perceptual_weight: Weight for perceptual loss.
     :param: watermark_weight: Weight for watermark loss.
     :param: adversarial_loss: Weight for adversarial loss.
     """

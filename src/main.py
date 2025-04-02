@@ -1,17 +1,22 @@
 from PIL import Image
 from pathlib import Path
-from lossFunctions import *
+from GAN import *
 from torch.optim import Adam
 from torch import Tensor
 import torch.nn as nn
+from util.comparison import *
 from util.dctdwt import (
+    embedWatermark,
     embedWatermarkDCT,
     embedWatermarkDWT,
     extractWatermarkDCT,
     extractWatermarkDWT,
 )
+import torch
 from util.debug import displayImageTensors
-from util.texture import convert_image_to_tensor, preprocessImage
+from util.texture import imageToTensor, preprocessImage, tensorToImage
+
+torch.manual_seed(0)  # for reproducibility
 
 # load assets
 DATA_PATH = Path("data")
@@ -61,40 +66,77 @@ def main():
     contentTensor: Tensor = preprocessImage(CONTENT_IMAGES_LIST[0])
     styleTensor: Tensor = preprocessImage(STYLE_IMAGES_LIST[0])
 
+    # TEST
+
+    # Load the generated image for watermark extraction
+    generatedImagePath = DATA_PATH / "test" / "gen_200.png"
+    assert (
+        generatedImagePath.exists()
+    ), "Generated image not found at the specified path."
+
+    generatedImage: Image = Image.open(generatedImagePath)
+    generatedTensor: Tensor = preprocessImage(generatedImage)
+
+    # Perform DST watermark extraction
+    extractedWatermark = extractWatermarkDCT(
+        contentTensor, generatedTensor, alpha=0.0001
+    )
+
+    displayImageTensors(extractedWatermark, titles=["Extracted Watermark (DWT)"])
+
+    # END TEST
+
+    # Display the extracted watermark
+    displayImageTensors(extractedWatermark, titles=["Extracted Watermark"])
+
     print(contentTensor)
     print(styleTensor)
 
     # DWT DCT alpha values
     # controls the strength of the watermark
     # higher values = stronger / more visible watermark
-    DWTAlpha = 1
-    DCTAlpha = 1
+    DWTAlpha = 0.001
+    DCTAlpha = 0.0001
 
-    watermarkedDWT = embedWatermarkDWT(contentTensor, watermarkTensor, DWTAlpha)
-    extractedWatermarkDWT = extractWatermarkDWT(contentTensor, watermarkedDWT, DWTAlpha)
-
-    watermarkedDWT = embedWatermarkDCT(watermarkedDWT, extractedWatermarkDWT, DCTAlpha)
-    extractedWatermarkDCT = extractWatermarkDCT(contentTensor, watermarkedDWT, DCTAlpha)
-
-    displayImageTensors(
+    [finalTensor, extracted, _, _, _, _] = embedWatermark(
         contentTensor,
         watermarkTensor,
-        watermarkedDWT,
-        extractedWatermarkDWT,
-        watermarkedDWT,
-        extractedWatermarkDCT,
-        titles=[
-            "Content Image",
-            "Watermark",
-            "Watermarked Image DWT",
-            "Extracted Watermark DWT",
-            "Final Watermarked Image DCT",
-            "Final Extracted Watermark DCT",
-        ],
+        alphasDWT=[DWTAlpha, DWTAlpha, DWTAlpha * 40, DWTAlpha * 40],
+        alphaDCT=DCTAlpha,
+        display=True,
     )
 
+    # Save the final image to a file
+    finalImage: Image = tensorToImage(finalTensor)
+    outputPath = DATA_PATH / "output" / "final_image.jpg"
+    outputPath.parent.mkdir(parents=True, exist_ok=True)
+    finalImage.save(outputPath)
+    print(f"Final image saved to {outputPath}")
+
+    pixelDiff = pixelDifference(contentTensor, finalTensor)
+    MSEDiff = MSEDifference(contentTensor, imageToTensor(finalImage))
+    perceptualDiff = perceptualDifference(contentTensor, finalTensor)
+    structuralDiff = structuralDifference(contentTensor, finalTensor)
+    peakNoise = PSNR(contentTensor, finalTensor)
     print("after embedding watermark")
 
+    # amplify the differences
+    pixelDiff *= 255.0
+    pixelDiff /= DWTAlpha
+    MSEDiff *= 255.0
+    print("Pixel Difference: ", pixelDiff)
+    print("MSE Difference: ", MSEDiff)
+    print("Perceptual Difference: ", perceptualDiff)
+    print("Structural Difference: ", structuralDiff)
+    print("Peak Noise: ", peakNoise)
+
+    displayImageTensors(
+        pixelDiff,
+        titles=[
+            "Pixel Difference",
+            "MSE Difference",
+        ],
+    )
     input("Press Enter to continue...")
 
 

@@ -4,7 +4,7 @@ from PIL import Image
 
 import matplotlib.pyplot as plt
 
-from util.texture import imageToTensor
+from util.texture import tensorToImage
 
 
 def getVariableName(var: any) -> str:
@@ -34,7 +34,7 @@ def displayImageTensors(*tensors: Tensor, titles: list[str] = None) -> None:
         axes = [axes]
 
     for ax, tensor in zip(axes, tensors):
-        image = imageToTensor(tensor)
+        image = tensorToImage(tensor)
 
         # Determine colormap based on image mode
         if image.mode == "L":

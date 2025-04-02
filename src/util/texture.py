@@ -39,7 +39,7 @@ def preprocessImage(image: PIL.Image, preserve_color: bool = True) -> Tensor:
         return transform_gray(image).unsqueeze(0)
 
 
-def convert_image_to_tensor(image: PIL.Image, preserve_color: bool = True) -> Tensor:
+def imageToTensor(image: PIL.Image, preserve_color: bool = True) -> Tensor:
     """
     Convert PIL image to tensor.
 
@@ -54,7 +54,7 @@ def convert_image_to_tensor(image: PIL.Image, preserve_color: bool = True) -> Te
         return transform_gray(image).unsqueeze(0)
 
 
-def imageToTensor(tensor: Tensor) -> PIL.Image:
+def tensorToImage(tensor: Tensor) -> PIL.Image:
     """
     Convert tensor to PIL image.
 
@@ -66,11 +66,15 @@ def imageToTensor(tensor: Tensor) -> PIL.Image:
     if tensor.dim() == 4:  # If tensor has batch dimension
         tensor = tensor.squeeze(0)
 
-    # Determine mode based on the number of channels
-    if tensor.shape[0] == 1:
-        mode = "L"  # Grayscale
-    else:
-        mode = "RGB"  # Color
+    mode = "L"
+    try:
+        # Determine mode based on the number of channels
+        if tensor.shape[0] == 1:
+            mode = "L"  # Grayscale
+        else:
+            mode = "RGB"  # Color
+    except IndexError:
+        print("bruh")
 
     transform_to_pil = transforms.ToPILImage(mode=mode)
     return transform_to_pil(tensor)

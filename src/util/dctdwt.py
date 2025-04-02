@@ -6,6 +6,8 @@ from pywt import dwt2, idwt2
 import torchvision.transforms as transforms
 import numpy as np
 
+from util.debug import displayImageTensors
+
 
 def dwt_torch(image) -> tuple[Tensor, Tensor, Tensor, Tensor]:
     """
@@ -80,61 +82,79 @@ def idwt_torch(LL, LH, HL, HH) -> Tensor:
     return result
 
 
-def embedWatermarkDWT(image: Tensor, watermark: Tensor, alpha=0.1) -> Tensor:
+def embedWatermarkDWT(image: Tensor, watermark: Tensor, alphas: list[float]) -> Tensor:
     """
-    embeds watermark into image using Discrete Wavelet Transform (DWT)
+    Embeds watermark into image using Discrete Wavelet Transform (DWT).
 
     :param: image: Image tensor.
     :param: watermark: Watermark tensor.
-    :param: alpha: Scaling factor for watermark.
+    :param: alphas: List of scaling factors [LL_alpha, LH_alpha, HL_alpha, HH_alpha].
 
     :return: Watermarked image tensor.
     """
-    # get dwts of image and watermark
+    assert len(alphas) == 4, "alphas must be a list of 4 scaling factors."
+
+    # Get DWTs of image and watermark
     LL, LH, HL, HH = dwt_torch(image)
     LL_w, LH_w, HL_w, HH_w = dwt_torch(watermark)
 
     # Make watermark match image channels if needed
     if LL.shape[1] != LL_w.shape[1]:
-        # If image has more channels than watermark, replicate watermark channels
         if LL.shape[1] > LL_w.shape[1]:
-            LL_w = LL_w.repeat(1, LL.shape[1], 1, 1)
-            LH_w = LH_w.repeat(1, LH.shape[1], 1, 1)
-            HL_w = HL_w.repeat(1, HL.shape[1], 1, 1)
-            HH_w = HH_w.repeat(1, HH.shape[1], 1, 1)
+            LL_w = LL_w.repeat_interleave(1, LL.shape[1], 1, 1)
+            LH_w = LH_w.repeat_interleave(1, LH.shape[1], 1, 1)
+            HL_w = HL_w.repeat_interleave(1, HL.shape[1], 1, 1)
+            HH_w = HH_w.repeat_interleave(1, HH.shape[1], 1, 1)
 
-    # embed watermark
-    LL_embedded = LL + alpha * LL_w * 2
-    LH_embedded = LH + alpha * LH_w
-    HL_embedded = HL + alpha * HL_w
-    HH_embedded = HH + alpha * HH_w
+    # Embed watermark
+    # uses different scalling factors for different frequencies
+    # this is done since different information / distortion occurs depending on frequency
+    # the goal is to make the watermark less visually perceptible, but still visible to network
+    LL_embedded = LL + (alphas[0] * LL_w)
+    LH_embedded = LH + (alphas[1] * LH_w) + (alphas[1] * LL_w * 10)
+    HL_embedded = HL + (alphas[2] * HL_w)
+    HH_embedded = HH + (alphas[3] * HH_w)
 
     watermarked = idwt_torch(LL_embedded, LH_embedded, HL_embedded, HH_embedded)
     return watermarked
 
 
 def extractWatermarkDWT(
-    originalImage: Tensor, watermarkedImage: Tensor, alpha=0.1
+    originalImage: Tensor, watermarkedImage: Tensor, alphas: list[float]
 ) -> Tensor:
     """
     Extracts watermark from watermarked image using DWT.
 
     :param: originalImage: Original image tensor.
     :param: watermarkedImage: Watermarked image tensor.
-    :param: alpha: Scaling factor for watermark.
+    :param: alphas: List of scaling factors [LL_alpha, LH_alpha, HL_alpha, HH_alpha].
 
     :return: Extracted watermark tensor.
     """
+    assert len(alphas) == 4, "alphas must be a list of 4 scaling factors."
+
     # DWT decomposition
     LL_original, LH_original, HL_original, HH_original = dwt_torch(originalImage)
     LL_watermark, LH_watermark, HL_watermark, HH_watermark = dwt_torch(watermarkedImage)
 
-    # get coefficients of watermark
-    LL_extracted = (LL_watermark - LL_original) / alpha
-    LH_extracted = (LH_watermark - LH_original) / alpha
-    HL_extracted = (HL_watermark - HL_original) / alpha
-    HH_extracted = (HH_watermark - HH_original) / alpha
+    # Get coefficients of watermark
+    LL_extracted = (LL_watermark - LL_original) / alphas[0]
+    LH_extracted = (LH_watermark - LH_original) / alphas[1]
+    HL_extracted = (HL_watermark - HL_original) / alphas[2]
+    HH_extracted = (HH_watermark - HH_original) / alphas[3]
 
+    amplifiedLL = LL_extracted * 255
+    amplifiedLH = LH_extracted * 255
+    amplifiedHL = HL_extracted * 255
+    amplifiedHH = HH_extracted * 255
+
+    displayImageTensors(
+        amplifiedLL,
+        amplifiedLH,
+        amplifiedHL,
+        amplifiedHH,
+        titles=["Amplified LL", "Amplified LH", "Amplified HL", "Amplified HH"],
+    )
     extracted = idwt_torch(LL_extracted, LH_extracted, HL_extracted, HH_extracted)
     return extracted
 
@@ -213,10 +233,71 @@ def extractWatermarkDCT(
         # Extract watermark
         extracted_dct = (watermarked_dct - original_dct) / alpha
 
-        # Apply IDCT
+        # Apply IDCT to get the watermark
         result = idct(extracted_dct)
 
         # Store result
         extracted[:, c] = torch.tensor(result)
 
     return extracted
+
+
+def embedWatermark(
+    image: Tensor,
+    watermark: Tensor,
+    alphasDWT: list[float],
+    alphaDCT=0.1,
+    display=False,
+) -> list[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    """
+    Embeds watermark into image using both DWT and DCT methods.
+
+    :param: image: Image tensor.
+    :param: watermark: Watermark tensor.
+    :param: alphasDWT: List of scaling factors for DWT watermark [LL_alpha, LH_alpha, HL_alpha, HH_alpha].
+    :param: alphaDCT: Scaling factor for DCT watermark.
+    :param: display: Boolean to display images using matplotlib.
+
+    :return: List of tensors:
+        1. Combined watermarked image using DWT and DCT.
+        2. Extracted watermark using DWT and DCT.
+        3. Watermarked image using DWT.
+        4. Watermarked image using DCT.
+        5. Extracted watermark using DWT.
+        6. Extracted watermark using DCT.
+    """
+    assert len(alphasDWT) == 4, "alphasDWT must be a list of 4 scaling factors."
+
+    # Perform DWT first, then DCT
+    watermarkedDWT = embedWatermarkDWT(image, watermark, alphasDWT)
+    extractedWatermarkDWT = extractWatermarkDWT(image, watermarkedDWT, alphasDWT)
+
+    watermarkedDCT = embedWatermarkDCT(watermarkedDWT, extractedWatermarkDWT, alphaDCT)
+    extractedWatermarkDCT = extractWatermarkDCT(image, watermarkedDWT, alphaDCT)
+
+    if display:
+        displayImageTensors(
+            image,
+            watermark,
+            watermarkedDWT,
+            extractedWatermarkDWT,
+            watermarkedDWT,
+            extractedWatermarkDCT,
+            titles=[
+                "Content Image",
+                "Watermark",
+                "Watermarked Image DWT",
+                "Extracted Watermark DWT",
+                "Final Watermarked Image DCT",
+                "Final Extracted Watermark DCT",
+            ],
+        )
+
+    return [
+        watermarkedDWT,
+        extractedWatermarkDCT,
+        watermarkedDWT,
+        watermarkedDCT,
+        extractedWatermarkDWT,
+        extractedWatermarkDCT,
+    ]
