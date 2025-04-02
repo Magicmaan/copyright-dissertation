@@ -29,7 +29,7 @@ First test began after first full implementation of DCT DWT.
 
 ![Process](./assets/NST_TEST_01_process.png)
 
-![Features](./assets/lena_features.png)
+![Features](./assets/NST_TEST_01_watermarked_features.png)
 
 
 
