@@ -17,7 +17,7 @@ First test began after first full implementation of DCT DWT.
 # Images
 <div style="display: flex; justify-content: space-around; align-items: center; margin-bottom: 1rem;">
     <div style="text-align: center;">
-        <img src="/documentation/assets/.lena.png" alt="Lena" style="width: 45%;"/>
+        <img src="./assets/lena.png" alt="Lena" style="width: 45%;"/>
         <p>Input</p>
     </div>
     <div style="text-align: center;">
@@ -29,7 +29,7 @@ First test began after first full implementation of DCT DWT.
 
 ![Process](./assets/NST_TEST_01_process.png)
 
-![Features](./assets/.lana_features.png)
+![Features](./assets/lena_features.png)
 
 
 
