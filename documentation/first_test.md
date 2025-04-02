@@ -15,7 +15,7 @@ First test began after first full implementation of DCT DWT.
 * Peak Noise:  90.4090805053711
 
 # Images
-<div style="display: flex; justify-content: space-around; align-items: center; margin-bottom: 1rem;">
+<div style="display: flex; flex-direction: row; justify-content: space-around; align-items: center; margin-bottom: 1rem;">
     <div style="text-align: center;">
         <img src="./assets/lena.png" alt="Lena" style="width: 45%;"/>
         <p>Input</p>
