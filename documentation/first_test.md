@@ -1,7 +1,8 @@
 
 
 ### First Test 02/04/25
-First test began after first full implementation of DCT DWT
+First test began after first full implementation of DCT DWT.
+[GitHub Repository for Neural Style Transfer](https://github.com/Magicmaan/Neural-Style-Transfer)
 
 ## Parameters
 * DCT Alpha - 0.001
@@ -14,7 +15,21 @@ First test began after first full implementation of DCT DWT
 * Peak Noise:  90.4090805053711
 
 # Images
-![Lana Features](../assets/.lana_features)
-![Lena](../assets/.lena.png)
-![NST Test 01 Watermarked](../assets/.NST_TEST_01_watermarked.png)
-![NST Test 01 Process](../assets/.NST_TEST_01_process.png)
+<div style="display: flex; justify-content: space-around; align-items: center; margin-bottom: 1rem;">
+    <div style="text-align: center;">
+        <img src="/documentation/assets/.lena.png" alt="Lena" style="width: 45%;"/>
+        <p>Input</p>
+    </div>
+    <div style="text-align: center;">
+        <img src="./assets/NST_TEST_01_watermarked.png" alt="NST Test 01 Watermarked" style="width: 45%;"/>
+        <p>Output</p>
+    </div>
+</div>
+
+
+![Process](./assets/NST_TEST_01_process.png)
+
+![Features](./assets/.lana_features.png)
+
+
+
