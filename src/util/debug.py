@@ -4,7 +4,7 @@ from PIL import Image
 
 import matplotlib.pyplot as plt
 
-from util.texture import tensorToImage
+from util.image import tensorToImage
 
 
 def getVariableName(var: any) -> str:

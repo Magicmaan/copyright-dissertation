@@ -1,5 +1,6 @@
 from torch import Tensor
 import PIL.Image
+import torch
 from torchvision import transforms
 
 
@@ -20,7 +21,7 @@ transform_color = transforms.Compose(
 )
 
 
-def preprocessImage(image: PIL.Image, preserve_color: bool = True) -> Tensor:
+def preprocessImage(image: PIL.Image, device, preserve_color: bool = True) -> Tensor:
     """
     Preprocess image for neural style transfer.
 

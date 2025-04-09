@@ -31,16 +31,17 @@ class Generator(nn.Module):
 
         # use relu activation function
         # to ensure that the output is non-linear and can't be easily predicted
-        self.relu: nn.ReLU = nn.ReLU()
 
     # function to forward propagate the input
-    def forward(self, image: torch.Tensor, watermark: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, image: torch.Tensor, watermark: torch.Tensor
+    ) -> list[torch.Tensor, torch.Tensor]:
         """
         Forward propagate the input through the generator.
         :param: image: Content image tensor.
         :param: watermark: Watermark image tensor.
 
-        :return: Output of the generator
+        :return: Output of the generator.
         """
         [watermarkedImage, extracted, _, _, _, _] = embedWatermark(
             image,
@@ -49,3 +50,5 @@ class Generator(nn.Module):
             alphaDCT=self.alphaDCT,
             display=False,
         )
+
+        return [watermarkedImage, extracted]

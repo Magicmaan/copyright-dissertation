@@ -49,12 +49,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 vgg = VGG().to(device).eval()
 
 
-def perceptualDifference(image1: torch.Tensor, image2: torch.Tensor) -> float:
+def perceptualDifference(
+    image1: torch.Tensor, image2: torch.Tensor, displayFeatures: bool = False
+) -> float:
     """
-    Calculate the perceptual difference between two images using MSE.
+    Calculate the perceptual difference between two images feature maps using MSE.
     Args:
         image1: The first image.
         image2: The second image.
+        displayFeatures: Whether to display the feature maps of the images.
     Returns:
         float: The perceptual difference between the two images.
         (higher is worse, 0 is perfect match)
@@ -62,32 +65,34 @@ def perceptualDifference(image1: torch.Tensor, image2: torch.Tensor) -> float:
     image1 = image1.clone().to(device)
     image2 = image2.clone().to(device)
     convLayers = list(range(29))  # Include all layers
-    print("Extracting Feature Maps")
 
-    # Extract feature maps from img1
-    images = extractFeatures(vgg, image1, convLayers)
-    numFeatures = len(images)
-    cols = 4
-    rows = math.ceil(numFeatures / cols)
-    fig = plt.figure(figsize=(cols * 5, rows * 5))
-    for i in range(numFeatures):
-        a = fig.add_subplot(rows, cols, i + 1)
-        imgplot = plt.imshow(images[i])
-        a.axis("off")
-        a.set_title(f"Image1 Layer {convLayers[i]}")
-    plt.show()
+    if displayFeatures:
+        print("Extracting Feature Maps")
 
-    # Extract feature maps from img2
-    images2 = extractFeatures(vgg, image2, convLayers)
-    numFeatures2 = len(images2)
-    rows2 = math.ceil(numFeatures2 / cols)
-    fig = plt.figure(figsize=(cols * 5, rows2 * 5))
-    for i in range(numFeatures2):
-        a = fig.add_subplot(rows2, cols, i + 1)
-        imgplot = plt.imshow(images2[i])
-        a.axis("off")
-        a.set_title(f"Image2 Layer {convLayers[i]}")
-    plt.show()
+        # Extract feature maps from img1
+        images = extractFeatures(vgg, image1, convLayers)
+        numFeatures = len(images)
+        cols = 4
+        rows = math.ceil(numFeatures / cols)
+        fig = plt.figure(figsize=(cols * 5, rows * 5))
+        for i in range(numFeatures):
+            a = fig.add_subplot(rows, cols, i + 1)
+            imgplot = plt.imshow(images[i])
+            a.axis("off")
+            a.set_title(f"Image1 Layer {convLayers[i]}")
+        plt.show()
+
+        # Extract feature maps from img2
+        images2 = extractFeatures(vgg, image2, convLayers)
+        numFeatures2 = len(images2)
+        rows2 = math.ceil(numFeatures2 / cols)
+        fig = plt.figure(figsize=(cols * 5, rows2 * 5))
+        for i in range(numFeatures2):
+            a = fig.add_subplot(rows2, cols, i + 1)
+            imgplot = plt.imshow(images2[i])
+            a.axis("off")
+            a.set_title(f"Image2 Layer {convLayers[i]}")
+        plt.show()
 
     # Ensure feature maps are tensors
     image1Features = torch.cat([f.flatten() for f in vgg(image1)], dim=0)

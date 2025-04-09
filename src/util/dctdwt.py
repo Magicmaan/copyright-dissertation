@@ -116,6 +116,10 @@ def embedWatermarkDWT(image: Tensor, watermark: Tensor, alphas: list[float]) -> 
     HH_embedded = HH + (alphas[3] * HH_w)
 
     watermarked = idwt_torch(LL_embedded, LH_embedded, HL_embedded, HH_embedded)
+    # Clamp the watermarked tensor to ensure values stay within a valid range
+    watermarked = torch.clamp(
+        watermarked, 0, 1
+    )  # Adjust range as needed (e.g., 0-255 for standard images)
     return watermarked
 
 
@@ -272,7 +276,7 @@ def embedWatermark(
     watermarkedDWT = embedWatermarkDWT(image, watermark, alphasDWT)
     extractedWatermarkDWT = extractWatermarkDWT(image, watermarkedDWT, alphasDWT)
 
-    watermarkedDCT = embedWatermarkDCT(watermarkedDWT, extractedWatermarkDWT, alphaDCT)
+    watermarkedDCT = embedWatermarkDCT(watermarkedDWT, watermark, alphaDCT)
     extractedWatermarkDCT = extractWatermarkDCT(image, watermarkedDWT, alphaDCT)
 
     if display:
