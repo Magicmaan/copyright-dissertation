@@ -15,7 +15,7 @@
 ### Related files:
 | Image                          | Description                  |
 |--------------------------------|------------------------------|
-| ![alt text](ADAIN_watermark.png) | ADAIN Watermark              |
+| ![alt text](ADAIN_watermark.png) | Watermarked             |
 | ![alt text](ADAIN_styled_watermark.jpg) | ADAIN Styled Watermark        |
 
 
@@ -48,10 +48,12 @@ parameters = {
 * first proper run of optimising watermark for AST.
 * ADAIN model is chosen for NST as speed is greater than gatys.
 * ADAIN shows major artifacting compared to gatys. something that isn't present in the unstyled watermark. This is a cool consequence and unexpected.
+* Visible appearance of watermark post NST isn't prioritised, since it doesn't matter if the potential copyright infringers attempts lead to worse results
 
 * Uses a watermark detector network to optimise for NST end results.
 * Proper weighting of DWT values is learnt as model understands that the higher alphas give more effect
-* Adversarial hyper-parameter is kept higher to ensure model priortises it over others
+* Adversarial hyper-parameter is kept higher to ensure model priortises it over others.
+* Despite no changes to parameters or optimisation learning rates. the rate is far lower. most likely due to watermark detector network having slower learning rate.
 # Full GATYS optimisation
 ![alt text](GATYS_styled_watermark.jpg)
 * performed same as ADAIN, just using gatys instead

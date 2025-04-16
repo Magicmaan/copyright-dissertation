@@ -400,9 +400,10 @@ def train(
             # Plot loss
             plt.subplot(2, 1, 1)
             plt.plot(range(epochs), losses, label="Total Loss", color="red")
-            plt.title("Loss over epochs")
+            plt.yscale("log")  # Use log scale for loss
+            plt.title("Loss over epochs (Log Scale)")
             plt.xlabel("Epoch")
-            plt.ylabel("Loss")
+            plt.ylabel("Loss (Log Scale)")
             plt.legend()
 
             # Plot alphas
@@ -424,13 +425,14 @@ def train(
                     label=f"DWT Alpha {i+1}",
                 )
 
-            plt.title("Alpha Values over epochs")
+            plt.yscale("log")  # Use log scale for alphas
+            plt.title("Alpha Values over epochs (Log Scale)")
             plt.xlabel("Epoch")
-            plt.ylabel("Alpha Value")
+            plt.ylabel("Alpha Value (Log Scale)")
             plt.legend()
 
             plt.tight_layout()
-            plt.savefig("training_progress.png")
+            plt.savefig("training_progress_log_scale.png")
             plt.draw()
             plt.pause(0.001)
         except Exception as e:
