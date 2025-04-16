@@ -255,9 +255,7 @@ def train(
     # Loss weights - giving more weight to the watermark loss
     parameters = {
         "pixel": 0.3,  # Visual quality preservation
-        "watermark": 0.7,  # Watermark extraction quality
-        "watermark_nst": 1.5,  # Watermark extraction quality after NST, ensure strong penalty
-        "adversarial": 0.3,  # Adversarial loss for watermark detection
+        "adversarial": 1.5,  # Adversarial loss for watermark detection
         "dwt_weights": 0.8,  # DWT alphas weight
     }
 
@@ -477,6 +475,12 @@ def main():
         DCT_alpha=torch.tensor(dct_alpha).cuda(),
         display=True,
     )
+
+    # Save the final tensor as an image
+    final_image: Image = tensorToImage(finalTensor)
+    final_image.save("final_tensor_image.png")
+
+    print("Final tensor image saved as 'final_tensor_image.png'")
 
     input("Press Enter to continue...")
     return

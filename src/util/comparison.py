@@ -91,7 +91,7 @@ def perceptualDifference(
     image1Features = torch.cat([f.flatten() for f in image1_features_tensor], dim=0)
     image2Features = torch.cat([f.flatten() for f in image2_features_tensor], dim=0)
 
-    mse = torch.nn.functional.ms_e((image1Features - image2Features) ** 2).item()
+    mse = torch.nn.functional.mse((image1Features - image2Features) ** 2).item()
     return mse
 
 
