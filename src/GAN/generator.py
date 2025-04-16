@@ -47,7 +47,7 @@ class Generator(nn.Module):
             image,
             watermark,
             alphaDWT=self.alphaDWTList,
-            alphaDCT=self.alphaDCT,
+            DCT_alpha=self.alphaDCT,
             display=False,
         )
 

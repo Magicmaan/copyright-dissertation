@@ -1,11 +1,13 @@
 from PIL import Image
+import numpy as np
+from torch.utils.data import DataLoader, Dataset
 from pathlib import Path
 from GAN import *
 from torch.optim import Adam
 from torch import Tensor
 import torch.nn as nn
 from GAN import adversarialLoss
-from GAN import Discriminator
+from GAN import Discriminator as DiscriminatorExt
 from GAN import discriminatorLoss
 from GAN import Generator
 from GAN import PerceptualLoss
@@ -13,15 +15,17 @@ from util.NST import performNST
 from util.comparison import *
 from util.dctdwt import (
     embedWatermark,
-    embedWatermarkDCT,
-    embedWatermarkDWT,
-    extractWatermarkDCT,
-    extractWatermarkDWT,
+    extract_watermark_dwt,
+    extract_watermark_dct,
 )
 import torch
-from util.debug import displayImageTensors
+from util.debug import display_image_tensors
 from util.image import imageToTensor, preprocessImage, tensorToImage
 import os
+
+import tkinter as tk
+from tkinter import Canvas
+from PIL import ImageTk, Image
 
 # Load VGG19 model
 if torch.cuda.is_available():
@@ -59,7 +63,7 @@ assert len(STYLE_IMAGES_LIST) > 0, "No style images found."
 model = nn.Sequential(nn.Linear(10, 50), nn.ReLU(), nn.Linear(50, 1))
 
 GENERATOR = Generator()
-DISCRIMINATOR = Discriminator()
+DISCRIMINATOR = DiscriminatorExt()
 
 generatorOptimiser = Adam(params=model.parameters(), lr=0.001, betas=(0.5, 0.999))
 discriminatorOptimiser = Adam(params=model.parameters(), lr=0.001, betas=(0.5, 0.999))
@@ -79,101 +83,418 @@ TOTAL_LOSS = TotalLoss(
 )
 
 
-# WORK IN PROGRESS
-def train(watermarkTensor: Tensor, contentTensor: Tensor) -> None:
-    for epoch in range(EPOCHS):
-
-        [watermarkedTensor, extractedWatermark] = GENERATOR.forward(
-            contentTensor, watermarkTensor
+class WatermarkDetector(nn.Module):
+    def __init__(self):
+        super(WatermarkDetector, self).__init__()
+        self.model = nn.Sequential(
+            nn.Conv2d(6, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
+            nn.Linear(64, 1),
+            nn.Sigmoid(),
         )
 
-        styledTensor = performNST(
-            contentTensor, styledTensor, outputPath="output/gen_latest.png"
+    def forward(self, content, watermarked):
+        x = torch.cat([content, watermarked], dim=1)  # Concatenate along channel dim
+        return self.model(x)
+
+
+class ImageDataset(Dataset):
+    def __init__(self, imagesPath: Path):
+        self.imagesPath = imagesPath
+        self.imageFiles = [f for f in imagesPath.glob("*.jpg") if f.is_file()]
+        assert self.imageFiles, "No .jpg files found in the specified path."
+
+    def __len__(self) -> int:
+        return len(self.imageFiles)
+
+    def __getitem__(self, index: int) -> Image.Image:
+        imagePath = self.imageFiles[index]
+        assert imagePath.exists(), f"File {imagePath} does not exist."
+        return imageToTensor(Image.open(imagePath).convert("RGB"))
+
+
+def makeDataset(count: int = 50):
+    TRAINING_PATH = Path("data") / "training"
+    IMAGES_PATH = TRAINING_PATH / "content"
+    WATERMARK_PATH = TRAINING_PATH / "watermark" / "watermark.jpg"
+    OUTPUT_PATH = TRAINING_PATH / "output"
+    assert IMAGES_PATH.exists(), "The images path does not exist."
+    assert WATERMARK_PATH.exists(), "The watermark path does not exist."
+
+    WATERMARK = imageToTensor(Image.open(WATERMARK_PATH))
+    assert WATERMARK is not None, "Watermark not found."
+    dataset = ImageDataset(IMAGES_PATH)
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+
+    for i, image in enumerate(dataloader):
+        if i >= count:
+            break
+
+        tensor = image[0]
+
+        [watermarked, extracted, _, _, _, _] = embedWatermark(
+            tensor,
+            WATERMARK,
+            DWT_alphas=[0.001, 0.0001, 0.0001, 0.0001],
+            DCT_alpha=0.0001,
+            display=False,
         )
-        # styledTensor = styleTransfer(watermarkedTensor, styleTensor)
 
-        # TODO
-        styledExtractedWatermark = torch.Tensor()
-        # styledExtractedWatermark = extractWatermarkNST()
+        watermarkImage = tensorToImage(watermarked)
+        outputPath = OUTPUT_PATH / f"watermarked_{i}.jpg"
 
-        # train the generator
-        generatorOptimiser.zero_grad()
-        # get loss between the generated image and the content image (visual)
-        pLoss = perceptualDifference(watermarkedTensor, contentTensor)
-        # get watermark loss
-        wLoss = MSEDifference(watermarkedTensor, styledExtractedWatermark)
-        # adversarial loss
-        # learns to keep watermark after NST
-        # high loss = watermark is not present in the image
-        # low loss = watermark is present in the image
-        aLoss = adversarialLoss(DISCRIMINATOR, watermarkedTensor)
+        watermarkImage.save(outputPath)
+        print(f"Saved watermarked image to {outputPath}")
 
-        # discriminator loss
-        # learns to differentiate between pre-NST and post-NST images
-        # high loss = watermark is present in the image
-        # low loss = watermark is present in the image
-        discriminatorLoss = discriminatorLoss(
-            DISCRIMINATOR, watermarkedTensor, styledTensor
+        # Process each image here (e.g., apply transformations, save output, etc.)
+
+
+# Training loop
+def train_adversarial_watermarking(
+    content_images, watermark, style_images, epochs=10, device="cuda"
+):
+    # Learnable alphas (initialized small)
+    alphas = torch.nn.Parameter(
+        torch.tensor([0.05, 0.05, 0.05, 0.05, 0.05], requires_grad=True, device=device)
+    )
+
+    discriminator = Discriminator().to(device)
+    optimizer_G = Adam([alphas], lr=1e-3)
+    optimizer_D = Adam(discriminator.parameters(), lr=1e-4)
+
+    mse_loss = nn.MSELoss()
+    bce_loss = nn.BCELoss()
+
+    for epoch in range(epochs):
+        for i, (content_img, style_img) in enumerate(zip(content_images, style_images)):
+            content_img = content_img.to(device)
+            style_img = style_img.to(device)
+
+            # --- Generator step ---
+            optimizer_G.zero_grad()
+
+            [wm_img, extracted, _, _, _, _] = embedWatermark(
+                content_img, watermark, *alphas
+            )
+            stylized_img = performNST(wm_img, style_img)
+
+            recovered_wm = extract_watermark(stylized_img)
+
+            # Losses
+            watermark_loss = mse_loss(recovered_wm, watermark)
+            perceptual_loss = mse_loss(content_img, wm_img)
+
+            pred = discriminator(stylized_img)
+            adversarial_loss = -torch.mean(torch.log(pred + 1e-8))
+
+            total_loss = (
+                1.0 * perceptual_loss + 2.0 * watermark_loss + 1.0 * adversarial_loss
+            )
+
+            total_loss.backward()
+            optimizer_G.step()
+
+            # --- Discriminator step ---
+            optimizer_D.zero_grad()
+            pred_real = discriminator(wm_img.detach())
+            pred_fake = discriminator(stylized_img.detach())
+
+            loss_D = -torch.mean(torch.log(pred_fake + 1e-8)) + torch.mean(
+                torch.log(1 - pred_real + 1e-8)
+            )
+            loss_D.backward()
+            optimizer_D.step()
+
+            if i % 10 == 0:
+                print(
+                    f"Epoch {epoch}, Step {i}: Total Loss {total_loss.item():.4f}, Watermark {watermark_loss.item():.4f}"
+                )
+
+    return alphas.detach().cpu()
+
+
+def train(
+    content_tensor: Tensor, watermark_tensor: Tensor, style_tensor: Tensor, epochs=100
+):
+    """
+    Train the watermarking system to find optimal alpha values.
+
+    Args:
+        content_tensor: The original content image
+        watermark_tensor: The watermark to embed
+        style_tensor: The style image (not directly used in training)
+        epochs: Number of training epochs
+
+    Returns:
+        Tuple of optimized alpha parameters (dwt_alphas, dct_alpha)
+    """
+
+    # initialise adversary
+    adversary = WatermarkDetector().to(DEVICE)
+    adversary_optimiser = Adam(adversary.parameters(), lr=0.001, betas=(0.5, 0.999))
+
+    # Initialize alpha parameters with requires_grad=True - using smaller initial values
+    # dwt_alphas = nn.Parameter(
+    #     torch.tensor([0.1, 0.1, 0.1, 0.1], device=DEVICE, requires_grad=True)
+    # )
+    # dwt_alphas = Tensor([0.1, 0.1, 0.1, 0.1]).to(DEVICE)
+    dwt_a1 = nn.Parameter(torch.tensor(0.1, device=DEVICE, requires_grad=True))
+    dwt_a2 = nn.Parameter(torch.tensor(0.1, device=DEVICE, requires_grad=True))
+    dwt_a3 = nn.Parameter(torch.tensor(0.1, device=DEVICE, requires_grad=True))
+    dwt_a4 = nn.Parameter(torch.tensor(0.1, device=DEVICE, requires_grad=True))
+    dct_alpha = nn.Parameter(torch.tensor(0.1, device=DEVICE, requires_grad=True))
+
+    # Create optimizer with appropriate learning rate
+    optimiser = Adam([dwt_a1, dwt_a2, dwt_a3, dwt_a4, dct_alpha], lr=0.01)
+
+    # Loss weights - giving more weight to the watermark loss
+    parameters = {
+        "pixel": 0.3,  # Visual quality preservation
+        "watermark": 0.7,  # Watermark extraction quality
+        "watermark_nst": 1.5,  # Watermark extraction quality after NST, ensure strong penalty
+        "adversarial": 0.3,  # Adversarial loss for watermark detection
+        "dwt_weights": 0.8,  # DWT alphas weight
+    }
+
+    # Arrays to track loss and alpha values
+    losses = []
+    dwt_alpha_history: list[list[float, float, float, float]] = []
+    dct_alpha_history: list[float] = []
+
+    print("Beginning training...")
+    for epoch in range(epochs):
+        # Reset gradients
+        optimiser.zero_grad()
+        adversary_optimiser.zero_grad()
+        # dct_alpha.grad
+        dct_alpha.requires_grad = True
+        dwt_a1.requires_grad = True
+        dwt_a2.requires_grad = True
+        dwt_a3.requires_grad = True
+        dwt_a4.requires_grad = True
+
+        # print(f"gradient: {dct_alpha.grad}")
+        # print(f"gradient: {dwt_alphas.grad}")
+
+        # Forward pass - embed watermark using current alpha values
+        watermarked, extracted, _, _, _, _ = embedWatermark(
+            content_tensor,
+            watermark_tensor,
+            [dwt_a1, dwt_a2, dwt_a3, dwt_a4],
+            dct_alpha,
+            display=False,
         )
 
-        # get total loss for the generator
-        generatorLoss = (
-            WEIGHTS["perceptual"] * pLoss
-            + WEIGHTS["watermark"] * wLoss
-            + WEIGHTS["adversarial"] * aLoss
+        styled = performNST(
+            watermarked,
+            style_tensor,  # Use the style image for NST
+            iterations=5,
+            mode="adain",
         )
-        generatorLoss.backward()
-        generatorOptimiser.step()
+        styled = styled.to(DEVICE)
+
+        # get adversary prediction for if watermark exists
+        prediction = adversary(content_tensor, styled)
+
+        # the ground truth ( watermark 100% exists) is 1.0, so initialise target for adversary to aim for
+        label = torch.ones_like(prediction, device=DEVICE)
+
+        adversary_loss = torch.nn.functional.binary_cross_entropy(prediction, label)
+        print("Watermark Adversary Loss: ", adversary_loss.item())
+        # Calculate losses
+        pixel_loss = torch.nn.functional.mse_loss(content_tensor, watermarked)
+        # watermark_loss = torch.nn.functional.mse_loss(watermark_tensor, extracted)
+        # pixel_loss.requires_grad = True
+        # watermark_loss.requires_grad = True
+        # We want to minimize pixel loss and maximize watermark quality
+        # (minimizing negative watermark loss = maximizing extraction quality)
+        # fmt: off
+        total_loss = (
+            parameters["pixel"] * pixel_loss
+            # - parameters["watermark"] * (-watermark_loss)
+            * parameters["adversarial"] * adversary_loss
+        )
+        # fmt: on
+
+        # total_loss.requires_grad = True
+        # Backpropagate
+        total_loss.backward()
+
+        dct_alpha.backward()
+
+        def relative_decay_loss(alphas: list[torch.Tensor]) -> torch.Tensor:
+            """
+            Adds a penalty if DWT alphas are not strictly decreasing.
+            Encourages dwtAlphas[0] > dwtAlphas[1] > ... > dwtAlphas[n]
+            """
+            penalty = 0.0
+            for i in range(1, len(alphas)):
+                target_alpha = alphas[i - 1] * parameters["dwt_weights"]
+                penalty += (alphas[i] - target_alpha) * 2
+
+            print("Penalty: ", penalty.item())
+            return penalty
+
+        # add weighting to dwt alphas to ensure model understands the weighting for each alpha
+        # this is done since the lower dwt alphas embed more into style and less into content
+        # a1 > a2 > a3 > a4
+        regLoss = relative_decay_loss([dwt_a1, dwt_a2, dwt_a3, dwt_a4])
+        # print(f"regLoss: {regLoss.item()}")
+        total_loss += regLoss
+
+        dwt_a1.backward()
+        dwt_a2.backward()
+        dwt_a3.backward()
+        dwt_a4.backward()
+        # dwt_alphas.backward()
+
+        # Verify gradients exist before optimization step
+        if dwt_a1.grad is None or dct_alpha.grad is None:
+            print(f"Epoch {epoch+1}: No gradients - gradient flow issue detected")
+            print(f"dwt_alphas.grad: {dwt_a1.grad}")
+            print(f"dct_alpha.grad: {dct_alpha.grad}")
+
+        # Update parameters
+        optimiser.step()
+        adversary_optimiser.step()
+
+        # Clamp alphas to positive values (important to keep watermarking stable)
+        with torch.no_grad():
+            dwt_a1.data.clamp_(min=0.00001, max=0.1)
+            dwt_a2.data.clamp_(min=0.00001, max=0.1)
+            dwt_a3.data.clamp_(min=0.00001, max=0.1)
+            dwt_a4.data.clamp_(min=0.00001, max=0.1)
+            dct_alpha.data.clamp_(min=0.00001, max=0.1)
+
+        # Store history
+        losses.append(total_loss.item())
+        dwt_alpha_history.append(
+            [dwt_a1.item(), dwt_a2.item(), dwt_a3.item(), dwt_a4.item()]
+        )
+        dct_alpha_history.append(dct_alpha.item())
+
+        # Print progress regularly
+        if (epoch + 1) % 10 == 0:
+            print(
+                f"Epoch [{epoch + 1}/{epochs}], "
+                f"Total Loss: {total_loss.item():.6f}, "
+                f"Pixel Loss: {pixel_loss.item():.6f}, "
+                # f"Watermark Loss: {watermark_loss.item():.6f}, "
+                f"DWT Alphas: { dwt_a1.item()}, {dwt_a2.item()}, {dwt_a3.item()}, {dwt_a4.item()}], "
+                f"DCT Alpha: {dct_alpha.item():.6f}"
+            )
+
+    # Plot the training progress
+    if epochs > 1:
+        print("epoch history")
+        print(dct_alpha_history)
+        print(dwt_alpha_history)
+        try:
+            import matplotlib.pyplot as plt
+
+            plt.figure(figsize=(12, 8))
+
+            # Plot loss
+            plt.subplot(2, 1, 1)
+            plt.plot(range(epochs), losses, label="Total Loss", color="red")
+            plt.title("Loss over epochs")
+            plt.xlabel("Epoch")
+            plt.ylabel("Loss")
+            plt.legend()
+
+            # Plot alphas
+            plt.subplot(2, 1, 2)
+            plt.plot(range(epochs), dct_alpha_history, label="DCT Alpha", color="blue")
+
+            # Define colors for DWT alphas
+            dwt_colours = ["orange", "green", "purple", "brown"]
+
+            # Plot each DWT alpha separately with its own color
+            for i in range(4):
+                plt.plot(
+                    range(epochs),
+                    [alpha[i] for alpha in dwt_alpha_history],
+                    alpha=1 / (i + 1),
+                    color=dwt_colours[i],
+                    linestyle="dotted",
+                    linewidth=2,
+                    label=f"DWT Alpha {i+1}",
+                )
+
+            plt.title("Alpha Values over epochs")
+            plt.xlabel("Epoch")
+            plt.ylabel("Alpha Value")
+            plt.legend()
+
+            plt.tight_layout()
+            plt.savefig("training_progress.png")
+            plt.draw()
+            plt.pause(0.001)
+        except Exception as e:
+            print(f"Error plotting results: {e}")
+
+    print("Training complete.")
+    # print(f"Final DWT Alphas: {dwt_alphas.detach().cpu().numpy()}")
+    print(f"Final DCT Alpha: {dct_alpha.item()}")
+    print(
+        f"Final DWT Alphas: {dwt_a1.item()}, {dwt_a2.item()}, {dwt_a3.item()}, {dwt_a4.item()}"
+    )
+
+    return [
+        dwt_a1.detach().item(),
+        dwt_a2.detach().item(),
+        dwt_a3.detach().item(),
+        dwt_a4.detach().item(),
+    ], dct_alpha.item()
 
 
 def main():
     print("Hello from copyright-dissertation!")
 
-    watermarkTensor: Tensor = preprocessImage(WATERMARK, DEVICE)
-    contentTensor: Tensor = preprocessImage(CONTENT_IMAGES_LIST[0], DEVICE)
-    styleTensor: Tensor = preprocessImage(STYLE_IMAGES_LIST[0], DEVICE)
+    watermarkTensor: Tensor = preprocessImage(WATERMARK, DEVICE).to(DEVICE)
+    contentTensor: Tensor = preprocessImage(CONTENT_IMAGES_LIST[0], DEVICE).to(DEVICE)
+    styleTensor: Tensor = preprocessImage(STYLE_IMAGES_LIST[2], DEVICE).to(DEVICE)
 
-    # input("Press Enter to continue...")
-    # performNST()
+    dwt_alphas, dct_alpha = train(
+        contentTensor, watermarkTensor, styleTensor, epochs=10
+    )
 
-    # TEST
+    # perform DCT DWT watermark embedding
+    [finalTensor, extracted, _, _, _, _] = embedWatermark(
+        contentTensor,
+        watermarkTensor,
+        DWT_alphas=[
+            torch.tensor(dwt_alphas[0]).cuda(),
+            torch.tensor(dwt_alphas[1]).cuda(),
+            torch.tensor(dwt_alphas[2]).cuda(),
+            torch.tensor(dwt_alphas[3]).cuda(),
+        ],
+        DCT_alpha=torch.tensor(dct_alpha).cuda(),
+        display=True,
+    )
 
-    # # Load the generated image for watermark extraction
-    # generatedImagePath = DATA_PATH / "test" / "gen_200.png"
-    # assert (
-    #     generatedImagePath.exists()
-    # ), "Generated image not found at the specified path."
-
-    # generatedImage: Image = Image.open(generatedImagePath)
-    # generatedTensor: Tensor = preprocessImage(generatedImage, DEVICE)
-
-    # # Perform DST watermark extraction
-    # extractedWatermark = extractWatermarkDCT(
-    #     contentTensor, generatedTensor, alpha=0.0001
-    # )
-
-    # displayImageTensors(extractedWatermark, titles=["Extracted Watermark (DWT)"])
-
-    # # END TEST
-
-    # Display the extracted watermark
-    # displayImageTensors(extractedWatermark, titles=["Extracted Watermark"])
-
+    input("Press Enter to continue...")
+    return
     print(contentTensor)
     print(styleTensor)
 
     # DWT DCT alpha values
     # controls the strength of the watermark
     # higher values = stronger / more visible watermark
-    DWTAlpha = [0.6, 0.6, 0.05, 0.1]
-    DCTAlpha = 0.1
+    DWTAlpha = [0.01, 0.01, 0.01, 0.01]
+    DCTAlpha = 0.01
 
     # perform DCT DWT watermark embedding
     [finalTensor, extracted, _, _, _, _] = embedWatermark(
         contentTensor,
         watermarkTensor,
-        alphasDWT=DWTAlpha,
-        alphaDCT=DCTAlpha,
+        DWT_alphas=DWTAlpha,
+        DCT_alpha=DCTAlpha,
         display=True,
     )
 
@@ -186,7 +507,7 @@ def main():
 
     pixelDiff = pixelDifference(contentTensor, finalTensor)
     MSEDiff = MSEDifference(contentTensor, imageToTensor(finalImage))
-    perceptualDiff = perceptualDifference(contentTensor, finalTensor, False)
+    perceptualDiff = perceptualDifference(contentTensor, finalTensor, True)
     structuralDiff = structuralDifference(contentTensor, finalTensor)
     peakNoise = PSNR(contentTensor, finalTensor)
     print("after embedding watermark")
@@ -201,7 +522,7 @@ def main():
     print("Structural Difference: ", structuralDiff)
     print("Peak Noise: ", peakNoise)
 
-    displayImageTensors(
+    display_image_tensors(
         pixelDiff,
         extracted,
         titles=[
@@ -210,12 +531,14 @@ def main():
         ],
     )
 
+    input("Press Enter to continue...")
+    # Perform Neural Style Transfer (NST)
     styled = performNST(
         finalTensor.to(DEVICE, torch.float),
         styleTensor.to(DEVICE, torch.float),
-        iterations=10,
+        iterations=200,
     )
-    displayImageTensors(styled, titles=["Styled Tensor"])
+    display_image_tensors(styled, titles=["Styled Tensor"])
 
     NSTPerceptualDiff = perceptualDifference(
         finalTensor.cpu(),
@@ -223,12 +546,12 @@ def main():
         True,
     )
 
-    NSTDWTExtractedWatermark = extractWatermarkDWT(
+    NSTDWTExtractedWatermark = extract_watermark_dwt(
         contentTensor.cpu(),
         styled.cpu(),
         alphas=DWTAlpha,
     )
-    NSTDCTExtractedWatermark = extractWatermarkDCT(
+    NSTDCTExtractedWatermark = extract_watermark_dct(
         contentTensor.cpu(),
         styled.cpu(),
         alpha=0.0001,
@@ -236,7 +559,7 @@ def main():
 
     pixelDiffStyledFinal = pixelDifference(styled.cpu(), finalTensor.cpu())
 
-    displayImageTensors(
+    display_image_tensors(
         NSTDCTExtractedWatermark,
         NSTDWTExtractedWatermark,
         pixelDiffStyledFinal,
@@ -252,4 +575,5 @@ def main():
 
 
 if __name__ == "__main__":
+    # makeDataset(300)
     main()

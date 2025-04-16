@@ -5,7 +5,8 @@ import torchvision
 import matplotlib.pyplot as plt
 import math
 from torchmetrics.regression import MeanSquaredError
-from util.vgg19 import VGG, extractFeatures
+from util.debug import display_image_np, display_image_tensors
+from util.vgg19 import VGG, extractFeatures, numpyListToTensorList
 
 
 def pixelDifference(image1: torch.Tensor, image2: torch.Tensor) -> torch.Tensor:
@@ -66,39 +67,31 @@ def perceptualDifference(
     image2 = image2.clone().to(device)
     convLayers = list(range(29))  # Include all layers
 
+    image1_features_np, image1_features_tensor = vgg.extract_features(image1)
+    image2_features_np, image2_features_tensor = vgg.extract_features(image2)
+
+    difference: list[torch.Tensor] = []
+    for i in range(len(image1_features_tensor)):
+        features1 = image1_features_tensor[i] * 10
+        features2 = image2_features_tensor[i] * 10
+
+        diff = (features1 - features2) * 100
+        difference.append(diff)
+
     if displayFeatures:
-        print("Extracting Feature Maps")
+        display_image_np(image1_features_np, convLayers)
 
-        # Extract feature maps from img1
-        images = extractFeatures(vgg, image1, convLayers)
-        numFeatures = len(images)
-        cols = 4
-        rows = math.ceil(numFeatures / cols)
-        fig = plt.figure(figsize=(cols * 5, rows * 5))
-        for i in range(numFeatures):
-            a = fig.add_subplot(rows, cols, i + 1)
-            imgplot = plt.imshow(images[i])
-            a.axis("off")
-            a.set_title(f"Image1 Layer {convLayers[i]}")
-        plt.show()
+        display_image_np(image2_features_np, convLayers)
 
-        # Extract feature maps from img2
-        images2 = extractFeatures(vgg, image2, convLayers)
-        numFeatures2 = len(images2)
-        rows2 = math.ceil(numFeatures2 / cols)
-        fig = plt.figure(figsize=(cols * 5, rows2 * 5))
-        for i in range(numFeatures2):
-            a = fig.add_subplot(rows2, cols, i + 1)
-            imgplot = plt.imshow(images2[i])
-            a.axis("off")
-            a.set_title(f"Image2 Layer {convLayers[i]}")
-        plt.show()
+        display_image_np(
+            [tensor.cpu().detach().numpy()[0, 0] for tensor in difference], convLayers
+        )
 
-    # Ensure feature maps are tensors
-    image1Features = torch.cat([f.flatten() for f in vgg(image1)], dim=0)
-    image2Features = torch.cat([f.flatten() for f in vgg(image2)], dim=0)
+    # get total MSE
+    image1Features = torch.cat([f.flatten() for f in image1_features_tensor], dim=0)
+    image2Features = torch.cat([f.flatten() for f in image2_features_tensor], dim=0)
 
-    mse = torch.mean((image1Features - image2Features) ** 2).item()
+    mse = torch.nn.functional.ms_e((image1Features - image2Features) ** 2).item()
     return mse
 
 
