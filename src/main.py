@@ -218,6 +218,68 @@ def train_adversarial_watermarking(
     return alphas.detach().cpu()
 
 
+def plot_results(
+    epochs: int,
+    total_loss: list[float],
+    pixel_loss: list[float],
+    watermark_loss: list[float],
+    adversarial_loss: list[float],
+    dct_alpha: list[float],
+    dwt_alpha: list[list[float, float, float, float]],
+):
+    """Plot the training progress of the watermarking system."""
+    try:
+
+        plt.ion()  # Turn on interactive mode
+        plt.figure(figsize=(12, 8))
+
+        # Plot loss
+        plt.subplot(2, 1, 1)
+        plt.plot(range(epochs), total_loss, label="Total Loss", color="red")
+        plt.plot(range(epochs), pixel_loss, label="Pixel Loss", color="blue")
+        plt.plot(range(epochs), watermark_loss, label="Watermark Loss", color="green")
+        plt.plot(
+            range(epochs), adversarial_loss, label="Adversarial Loss", color="purple"
+        )
+        plt.yscale("linear")  # Use linear scale for loss
+        plt.title("Loss over epochs (Log Scale)")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss (Log Scale)")
+        plt.legend()
+
+        # Plot alphas
+        plt.subplot(2, 1, 2)
+        plt.plot(range(epochs), dct_alpha, label="DCT Alpha", color="blue")
+
+        # Define colors for DWT alphas
+        dwt_colours = ["orange", "green", "purple", "brown"]
+
+        # Plot each DWT alpha separately with its own color
+        for i in range(4):
+            plt.plot(
+                range(epochs),
+                [alpha[i] for alpha in dwt_alpha],
+                alpha=1 / (i + 1),
+                color=dwt_colours[i],
+                linestyle="dotted",
+                linewidth=2,
+                label=f"DWT Alpha {i+1}",
+            )
+
+        plt.yscale("log")  # Use log scale for alphas
+        plt.title("Alpha Values over epochs (Log Scale)")
+        plt.xlabel("Epoch")
+        plt.ylabel("Alpha Value (Log Scale)")
+        plt.legend()
+
+        plt.tight_layout()
+        plt.savefig("training_progress_log_scale.png")
+        plt.draw()
+        plt.pause(0.001)
+    except Exception as e:
+        print(f"Error plotting results: {e}")
+
+
 def train(
     content_tensor: Tensor, watermark_tensor: Tensor, style_tensor: Tensor, epochs=100
 ):
@@ -263,6 +325,19 @@ def train(
     losses = []
     dwt_alpha_history: list[list[float, float, float, float]] = []
     dct_alpha_history: list[float] = []
+
+    history = {
+        "total_loss": [],
+        "pixel_loss": [],
+        "watermark_loss": [],
+        "adversarial_loss": [],
+        "dct_alpha": [],
+        "dwt_alpha": [],
+    }
+
+    # dev stuff to cancel if values dont change
+    stall_count = 0
+    stall_count_max = 2
 
     print("Beginning training...")
     for epoch in range(epochs):
@@ -315,7 +390,7 @@ def train(
         total_loss = (
             parameters["pixel"] * pixel_loss
             # - parameters["watermark"] * (-watermark_loss)
-            * parameters["adversarial"] * adversary_loss
+            * (parameters["adversarial"] * adversary_loss)
         )
         # fmt: on
 
@@ -369,12 +444,37 @@ def train(
             dwt_a4.data.clamp_(min=0.00001, max=0.1)
             dct_alpha.data.clamp_(min=0.00001, max=0.1)
 
+        # dev functionality to cancel if losses are not changing
+        if (history["total_loss"] and len(history["total_loss"]) > 0) and (
+            len(history["total_loss"]) > 1
+        ):
+
+            if total_loss.item() == history["total_loss"][-1]:
+                stall_count += 1
+                print(f"Loss stalled {stall_count} times")
+                if stall_count >= stall_count_max:
+                    print(
+                        f"Training stalled for {stall_count_max} epochs. Stopping early."
+                    )
+                    epochs = epoch
+                    break
+            else:
+                stall_count = 0
+
         # Store history
-        losses.append(total_loss.item())
-        dwt_alpha_history.append(
+        history["total_loss"].append(total_loss.item())
+        history["pixel_loss"].append(pixel_loss.item())
+        history["watermark_loss"].append(adversary_loss.item())
+        history["adversarial_loss"].append(adversary_loss.item())
+        history["dct_alpha"].append(dct_alpha.item())
+        history["dwt_alpha"].append(
             [dwt_a1.item(), dwt_a2.item(), dwt_a3.item(), dwt_a4.item()]
         )
-        dct_alpha_history.append(dct_alpha.item())
+        # losses.append(total_loss.item())
+        # dwt_alpha_history.append(
+        #     [dwt_a1.item(), dwt_a2.item(), dwt_a3.item(), dwt_a4.item()]
+        # )
+        # dct_alpha_history.append(dct_alpha.item())
 
         # Print progress regularly
         if (epoch + 1) % 10 == 0:
@@ -388,55 +488,65 @@ def train(
             )
 
     # Plot the training progress
-    if epochs > 1:
+    if epochs > 0:
         print("epoch history")
         print(dct_alpha_history)
         print(dwt_alpha_history)
-        try:
-            import matplotlib.pyplot as plt
+        # try:
+        #     import matplotlib.pyplot as plt
 
-            plt.figure(figsize=(12, 8))
+        plot_results(
+            epochs=epochs,
+            total_loss=history["total_loss"],
+            pixel_loss=history["pixel_loss"],
+            watermark_loss=history["watermark_loss"],
+            adversarial_loss=history["adversarial_loss"],
+            dct_alpha=history["dct_alpha"],
+            dwt_alpha=history["dwt_alpha"],
+        )
+        #     plt.ion()  # Turn on interactive mode
+        #     plt.figure(figsize=(12, 8))
 
-            # Plot loss
-            plt.subplot(2, 1, 1)
-            plt.plot(range(epochs), losses, label="Total Loss", color="red")
-            plt.yscale("log")  # Use log scale for loss
-            plt.title("Loss over epochs (Log Scale)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Loss (Log Scale)")
-            plt.legend()
+        #     # Plot loss
+        #     plt.subplot(2, 1, 1)
+        #     plt.plot(range(epochs), losses, label="Total Loss", color="red")
+        #     plt.yscale("log")  # Use log scale for loss
+        #     plt.title("Loss over epochs (Log Scale)")
+        #     plt.xlabel("Epoch")
+        #     plt.ylabel("Loss (Log Scale)")
+        #     plt.legend()
 
-            # Plot alphas
-            plt.subplot(2, 1, 2)
-            plt.plot(range(epochs), dct_alpha_history, label="DCT Alpha", color="blue")
+        #     # Plot alphas
+        #     plt.subplot(2, 1, 2)
+        #     plt.plot(range(epochs), dct_alpha_history, label="DCT Alpha", color="blue")
 
-            # Define colors for DWT alphas
-            dwt_colours = ["orange", "green", "purple", "brown"]
+        #     # Define colors for DWT alphas
+        #     dwt_colours = ["orange", "green", "purple", "brown"]
 
-            # Plot each DWT alpha separately with its own color
-            for i in range(4):
-                plt.plot(
-                    range(epochs),
-                    [alpha[i] for alpha in dwt_alpha_history],
-                    alpha=1 / (i + 1),
-                    color=dwt_colours[i],
-                    linestyle="dotted",
-                    linewidth=2,
-                    label=f"DWT Alpha {i+1}",
-                )
+        #     # Plot each DWT alpha separately with its own color
+        #     for i in range(4):
+        #         plt.plot(
+        #             range(epochs),
+        #             [alpha[i] for alpha in dwt_alpha_history],
+        #             alpha=1 / (i + 1),
+        #             color=dwt_colours[i],
+        #             linestyle="dotted",
+        #             linewidth=2,
+        #             label=f"DWT Alpha {i+1}",
+        #         )
 
-            plt.yscale("log")  # Use log scale for alphas
-            plt.title("Alpha Values over epochs (Log Scale)")
-            plt.xlabel("Epoch")
-            plt.ylabel("Alpha Value (Log Scale)")
-            plt.legend()
+        #     plt.yscale("log")  # Use log scale for alphas
+        #     plt.title("Alpha Values over epochs (Log Scale)")
+        #     plt.xlabel("Epoch")
+        #     plt.ylabel("Alpha Value (Log Scale)")
+        #     plt.legend()
 
-            plt.tight_layout()
-            plt.savefig("training_progress_log_scale.png")
-            plt.draw()
-            plt.pause(0.001)
-        except Exception as e:
-            print(f"Error plotting results: {e}")
+        #     plt.tight_layout()
+        #     plt.savefig("training_progress_log_scale.png")
+        #     plt.draw()
+        #     plt.pause(0.001)
+        # except Exception as e:
+        #     print(f"Error plotting results: {e}")
 
     print("Training complete.")
     # print(f"Final DWT Alphas: {dwt_alphas.detach().cpu().numpy()}")
@@ -461,7 +571,7 @@ def main():
     styleTensor: Tensor = preprocessImage(STYLE_IMAGES_LIST[2], DEVICE).to(DEVICE)
 
     dwt_alphas, dct_alpha = train(
-        contentTensor, watermarkTensor, styleTensor, epochs=10
+        contentTensor, watermarkTensor, styleTensor, epochs=200
     )
 
     # perform DCT DWT watermark embedding

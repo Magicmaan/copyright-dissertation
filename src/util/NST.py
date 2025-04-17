@@ -68,7 +68,7 @@ def performNST(
     beta: float = 70,
     mode: ModeType = "gatys",
 ) -> Tensor:
-    print("path:", GATYS_PATH)
+    # print("path:", GATYS_PATH)
 
     outputPath = ROOT_DIRECTORY / "temp"
 
@@ -81,7 +81,7 @@ def performNST(
     ), f"Directory does not exist: {tempContentPath.parent}"
     contentImagePIL: Tensor = tensorToImage(contentImage)
     contentImagePIL.save(tempContentPath, format="JPEG")
-    print("Content Image saved to:", tempContentPath)
+    # print("Content Image saved to:", tempContentPath)
 
     tempStylePath = ROOT_DIRECTORY / "temp" / "style.jpg"
     tempStylePath.parent.mkdir(parents=True, exist_ok=True)
@@ -91,7 +91,7 @@ def performNST(
     styleImagePIL = tensorToImage(styleImage)
     styleImagePIL.save(tempStylePath, format="JPEG")
 
-    print("Style Image saved to:", tempStylePath)
+    # print("Style Image saved to:", tempStylePath)
 
     print("Calling Neural Style Transfer Script...")
 
@@ -165,7 +165,7 @@ def run_gatys(
 
     # Run the command
     command = " ".join(command)
-    print("Command:", command)
+    # print("Command:", command)
     subprocess.run(command, shell=True, check=True)
 
 
@@ -211,7 +211,7 @@ def run_adain(
 
     # Run the command
     command = " ".join(command)
-    print("Command:", command)
+    # print("Command:", command)
     subprocess.run(command, cwd=ADAIN_PATH, shell=True, check=True)
 
     # Move the output to the desired location

@@ -58,3 +58,7 @@ parameters = {
 ![alt text](GATYS_styled_watermark.jpg)
 * performed same as ADAIN, just using gatys instead
 
+# Issues from this
+![alt text](ADAIN_loss_breakdown.png)
+
+* The adversarial loss ( detection of watermark ) shows to be decreasing, it should be increasing. Indicating the model isn't detecting the watermark ( its confident at start as theirs more overall visibility, making the watermark less distorted)
