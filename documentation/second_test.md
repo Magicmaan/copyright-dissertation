@@ -12,6 +12,11 @@
 
 ## Full ADAIN optimisation
 
+the style
+![alt text](STYLE.jpg)
+
+
+
 ### Related files:
 | Image                          | Description                  |
 |--------------------------------|------------------------------|
@@ -62,3 +67,18 @@ parameters = {
 ![alt text](ADAIN_loss_breakdown.png)
 
 * The adversarial loss ( detection of watermark ) shows to be decreasing, it should be increasing. Indicating the model isn't detecting the watermark ( its confident at start as theirs more overall visibility, making the watermark less distorted)
+
+
+
+* model shows no preservation of watermark using dct coefficiets
+
+
+## Progrss
+
+* comparing the feature maps of extracted watermarks. obtained from an extractor network
+* shows more visibility, but pattern is actually preserved
+
+![alt text](ADAIN_all.png)
+![alt text](ADAIN_loss_2.png)
+![alt text](ADAIN_styled_watermarked_features_2.png)
+![alt text](ADAIN_watermarked_features_2.png)

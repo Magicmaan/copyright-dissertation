@@ -312,13 +312,14 @@ def train(
     dct_alpha = nn.Parameter(torch.tensor(0.1, device=DEVICE, requires_grad=True))
 
     # Create optimizer with appropriate learning rate
-    optimiser = Adam([dwt_a1, dwt_a2, dwt_a3, dwt_a4, dct_alpha], lr=0.01)
+    optimiser = Adam([dwt_a1, dwt_a2, dwt_a3, dwt_a4, dct_alpha], lr=0.001)
 
     # Loss weights - giving more weight to the watermark loss
     parameters = {
         "pixel": 0.3,  # Visual quality preservation
-        "adversarial": 1.5,  # Adversarial loss for watermark detection
+        "adversarial": 0.5,  # Adversarial loss for watermark detection
         "dwt_weights": 0.8,  # DWT alphas weight
+        "watermark": 0.5,  # Watermark quality preservation
     }
 
     # Arrays to track loss and alpha values
@@ -338,6 +339,9 @@ def train(
     # dev stuff to cancel if values dont change
     stall_count = 0
     stall_count_max = 2
+
+    base_styled = performNST(content_tensor, style_tensor, iterations=5, mode="adain")
+    base_styled = base_styled.to(DEVICE)
 
     print("Beginning training...")
     for epoch in range(epochs):
@@ -371,17 +375,23 @@ def train(
         )
         styled = styled.to(DEVICE)
 
+        styled_extracted = extract_watermark_dct(
+            content_tensor, styled, alpha=dct_alpha.item()
+        )
+
         # get adversary prediction for if watermark exists
         prediction = adversary(content_tensor, styled)
 
-        # the ground truth ( watermark 100% exists) is 1.0, so initialise target for adversary to aim for
+        # the ground truth ( watermark 100% exists) is 0.0, so initialise target for adversary to aim for
         label = torch.ones_like(prediction, device=DEVICE)
 
         adversary_loss = torch.nn.functional.binary_cross_entropy(prediction, label)
         print("Watermark Adversary Loss: ", adversary_loss.item())
         # Calculate losses
-        pixel_loss = torch.nn.functional.mse_loss(content_tensor, watermarked)
-        # watermark_loss = torch.nn.functional.mse_loss(watermark_tensor, extracted)
+        pixel_loss = torch.nn.functional.mse_loss(watermarked, styled)
+        watermark_loss = torch.nn.functional.mse_loss(
+            watermark_tensor, styled_extracted
+        )
         # pixel_loss.requires_grad = True
         # watermark_loss.requires_grad = True
         # We want to minimize pixel loss and maximize watermark quality
@@ -389,8 +399,8 @@ def train(
         # fmt: off
         total_loss = (
             parameters["pixel"] * pixel_loss
-            # - parameters["watermark"] * (-watermark_loss)
-            * (parameters["adversarial"] * adversary_loss)
+            + parameters["watermark"] * (watermark_loss)
+            + (parameters["adversarial"] * adversary_loss)
         )
         # fmt: on
 
@@ -410,7 +420,7 @@ def train(
                 target_alpha = alphas[i - 1] * parameters["dwt_weights"]
                 penalty += (alphas[i] - target_alpha) * 2
 
-            print("Penalty: ", penalty.item())
+            # print("Penalty: ", penalty.item())
             return penalty
 
         # add weighting to dwt alphas to ensure model understands the weighting for each alpha
@@ -419,18 +429,6 @@ def train(
         regLoss = relative_decay_loss([dwt_a1, dwt_a2, dwt_a3, dwt_a4])
         # print(f"regLoss: {regLoss.item()}")
         total_loss += regLoss
-
-        dwt_a1.backward()
-        dwt_a2.backward()
-        dwt_a3.backward()
-        dwt_a4.backward()
-        # dwt_alphas.backward()
-
-        # Verify gradients exist before optimization step
-        if dwt_a1.grad is None or dct_alpha.grad is None:
-            print(f"Epoch {epoch+1}: No gradients - gradient flow issue detected")
-            print(f"dwt_alphas.grad: {dwt_a1.grad}")
-            print(f"dct_alpha.grad: {dct_alpha.grad}")
 
         # Update parameters
         optimiser.step()
@@ -464,18 +462,17 @@ def train(
         # Store history
         history["total_loss"].append(total_loss.item())
         history["pixel_loss"].append(pixel_loss.item())
-        history["watermark_loss"].append(adversary_loss.item())
+        history["watermark_loss"].append(watermark_loss.item())
         history["adversarial_loss"].append(adversary_loss.item())
         history["dct_alpha"].append(dct_alpha.item())
         history["dwt_alpha"].append(
             [dwt_a1.item(), dwt_a2.item(), dwt_a3.item(), dwt_a4.item()]
         )
-        # losses.append(total_loss.item())
-        # dwt_alpha_history.append(
-        #     [dwt_a1.item(), dwt_a2.item(), dwt_a3.item(), dwt_a4.item()]
-        # )
-        # dct_alpha_history.append(dct_alpha.item())
 
+        print(f"Epoch {epoch + 1}/{epochs} - Total Loss: {total_loss.item():.6f}")
+        print(f"Pixel Loss: {pixel_loss.item():.6f}")
+        print(f"Watermark Loss: {watermark_loss.item():.6f}")
+        print(f"Adversarial Loss: {adversary_loss.item():.6f}")
         # Print progress regularly
         if (epoch + 1) % 10 == 0:
             print(
@@ -487,6 +484,31 @@ def train(
                 f"DCT Alpha: {dct_alpha.item():.6f}"
             )
 
+        # Save styled watermark and other intermediate results
+        temp_dir = Path("../temp")
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        styled_image_path = temp_dir / f"styled_watermark_epoch_{epoch + 1}.png"
+        watermarked_image_path = temp_dir / f"watermarked_epoch_{epoch + 1}.png"
+        extracted_watermark_path = (
+            temp_dir / f"extracted_watermark_epoch_{epoch + 1}.png"
+        )
+
+        # Save styled image
+        styled_image = tensorToImage(styled)
+        styled_image.save(styled_image_path)
+
+        # Save watermarked image
+        watermarked_image = tensorToImage(watermarked)
+        watermarked_image.save(watermarked_image_path)
+
+        # Save extracted watermark
+        extracted_watermark_image = tensorToImage(styled_extracted)
+        extracted_watermark_image.save(extracted_watermark_path)
+
+        print(f"Saved styled image to {styled_image_path}")
+        print(f"Saved watermarked image to {watermarked_image_path}")
+        print(f"Saved extracted watermark to {extracted_watermark_path}")
     # Plot the training progress
     if epochs > 0:
         print("epoch history")
@@ -504,6 +526,35 @@ def train(
             dct_alpha=history["dct_alpha"],
             dwt_alpha=history["dwt_alpha"],
         )
+
+        # Plot styled image, styled extracted watermark, and styled without watermark
+        try:
+            plt.figure(figsize=(12, 8))
+
+            # Styled image
+            plt.subplot(1, 3, 1)
+            plt.imshow(tensorToImage(styled).convert("RGB"))
+            plt.title("Styled Image")
+            plt.axis("off")
+
+            # Styled extracted watermark
+            plt.subplot(1, 3, 2)
+            plt.imshow(tensorToImage(styled_extracted).convert("RGB"))
+            plt.title("Styled Extracted Watermark")
+            plt.axis("off")
+
+            # Styled without watermark
+            plt.subplot(1, 3, 3)
+            styled_without_watermark = tensorToImage(styled - watermarked)
+            plt.imshow(styled_without_watermark.convert("RGB"))
+            plt.title("Styled Without Watermark")
+            plt.axis("off")
+
+            plt.tight_layout()
+            plt.savefig("styled_images_comparison.png")
+            plt.show()
+        except Exception as e:
+            print(f"Error plotting styled images: {e}")
         #     plt.ion()  # Turn on interactive mode
         #     plt.figure(figsize=(12, 8))
 
@@ -571,7 +622,7 @@ def main():
     styleTensor: Tensor = preprocessImage(STYLE_IMAGES_LIST[2], DEVICE).to(DEVICE)
 
     dwt_alphas, dct_alpha = train(
-        contentTensor, watermarkTensor, styleTensor, epochs=200
+        contentTensor, watermarkTensor, styleTensor, epochs=10
     )
 
     # perform DCT DWT watermark embedding
