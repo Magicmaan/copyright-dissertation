@@ -1,0 +1,14 @@
+Pixel Difference (Watermarked vs Styled Watermarked): 0.2534554600715637
+PSNR (Watermarked vs Styled Watermarked): 58.06178283691406
+Perceptual Difference (Watermarked vs Styled Watermarked): 2.164849042892456
+Structural Difference (Watermarked vs Styled Watermarked): 0.27579429745674133
+
+Pixel Difference (Extracted vs Styled Extracted): 1.4465965032577515
+PSNR (Extracted vs Styled Extracted): 43.11536407470703
+Perceptual Difference (Extracted vs Styled Extracted): 12.632851600646973
+Structural Difference (Extracted vs Styled Extracted): 0.13561062514781952
+
+Pixel Difference (Styled vs Styled Watermarked): 0.02069917507469654
+PSNR (Styled vs Styled Watermarked): 78.43099212646484
+Perceptual Difference (Styled vs Styled Watermarked): 0.14285172522068024
+Structural Difference (Styled vs Styled Watermarked): 0.8088240623474121

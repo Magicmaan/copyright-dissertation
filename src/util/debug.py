@@ -1,8 +1,6 @@
 import math
-import numpy as np
 from torch import Tensor
-from torchvision import transforms
-from PIL import Image
+import numpy as np
 
 import matplotlib.pyplot as plt
 

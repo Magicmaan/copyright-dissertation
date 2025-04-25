@@ -7,7 +7,6 @@ import torch
 
 # from pywt import dwt2, idwt2
 import torchvision.transforms as transforms
-import numpy as np
 
 
 dwt2 = DWT2D(wave="haar", mode="zero", J=3).cuda()
@@ -359,7 +358,7 @@ def embedWatermark(
     extracted_dwt = extract_watermark_dwt(
         image, watermarked_dwt, DWT_alphas, display=False
     )
-    extracted_dct = extract_watermark_dct(image, watermarked_dct, DCT_alpha)
+    extracted_dct = extract_watermark_dct(watermarked_dwt, watermarked_dct, DCT_alpha)
 
     # The final extracted watermark is from the DCT step
     final_watermarked = watermarked_dct
@@ -369,15 +368,15 @@ def embedWatermark(
         display_image_tensors(
             image,
             watermark,
-            watermarked_dwt,
-            extracted_dwt,
+            watermarked_dct,
+            extracted_dct,
             final_watermarked,
             final_extracted,
             titles=[
                 "Content Image",
                 "Watermark",
-                "Watermarked Image DWT",
-                "Extracted Watermark DWT",
+                "Watermarked Image DCT",
+                "Extracted Watermark DCT",
                 "Final Watermarked Image DCT+DWT",
                 "Final Extracted Watermark",
             ],

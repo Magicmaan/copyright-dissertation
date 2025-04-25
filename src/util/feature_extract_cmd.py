@@ -12,7 +12,7 @@ import torchvision.models as models
 import torch.optim as optim
 from torchvision.utils import save_image
 import matplotlib.pyplot as plt
-import numpy as np
+
 from torchvision.models.feature_extraction import get_graph_node_names
 from torchvision.models.feature_extraction import create_feature_extractor
 import argparse
