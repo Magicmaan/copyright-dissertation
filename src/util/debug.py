@@ -72,10 +72,10 @@ def display_image_np(images: list[np.ndarray], titles: list[str] = None) -> None
         a = fig.add_subplot(rows, cols, i + 1)
         imgplot = plt.imshow(images[i])
         a.axis("off")
-        if titles is not None and titles:
-            a.set_title(titles.pop(0))
-        else:
-            a.set_title(f"Image Layer {i}")
+        # if titles is not None and titles:
+        #     a.set_title(titles.pop(0))
+        # else:
+        #     a.set_title(f"Image Layer {i}")
 
     plt.show(block=False)  # Show the plot without blocking
     plt.pause(0.001)  # Pause to allow for live updates

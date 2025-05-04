@@ -1,6 +1,9 @@
 import random
 from typing import Literal
 from PIL import Image
+import PIL
+import PIL.Image
+import PIL.ImageFile
 from torch.utils.data import DataLoader, Dataset
 from pathlib import Path
 from GAN import *
@@ -374,13 +377,252 @@ def train(
     )
 
 
-batch_type = Literal["1 to 1", "random", "same style", "same content"]
+def batch_watermark_size(
+    style_image: Path = None,
+    content_image: Path = None,
+    watermarks: list[Path] = None,
+    epochs: int = 25,
+    ext_path: Path = Path(""),
+):
+    assert style_image.exists(), f"Style image {style_image} does not exist."
+    assert content_image.exists(), f"Content image {content_image} does not exist."
+    assert watermarks, "Watermark list is empty."
+    assert len(watermarks) > 1, "Watermark list is 1 or under."
+
+    print("Performing watermark variable size analysis...")
+
+    watermark_tensors = [
+        preprocessImage(Image.open(watermark).convert("RGB"), DEVICE).to(DEVICE)
+        for watermark in watermarks
+    ]
+
+    content_tensor = preprocessImage(
+        Image.open(content_image).convert("RGB"), DEVICE
+    ).to(DEVICE)
+    style_tensor = preprocessImage(Image.open(style_image).convert("RGB"), DEVICE).to(
+        DEVICE
+    )
+
+    for i, watermark in enumerate(watermark_tensors):
+        print(f"Processing watermark {i + 1}/{len(watermarks)}...")
+
+        # Create a new directory for each watermark
+        output_path = (
+            TRAINING_PATH / "output" / ext_path / "watermark_size" / str(i + 1)
+        )
+        output_path.mkdir(parents=True, exist_ok=True)
+        assert output_path.exists(), f"Output path {output_path} does not exist."
+
+        (
+            dwt_alphas,
+            dct_alpha,
+            watermarked_image,
+            extracted_watermark,
+            styled_watermarked_image,
+            styled_extracted_watermark,
+            styled,
+        ) = train(
+            content_tensor=content_tensor,
+            watermark_tensor=watermark,
+            style_tensor=style_tensor,
+            epochs=epochs,
+            save_path=output_path,
+        )
+
+        # Save the content and style tensors as images
+        content_image_path = output_path / f"content.png"
+        content_image_pil = tensorToImage(content_tensor)
+        content_image_pil.save(content_image_path)
+
+        style_image_path = output_path / f"style.png"
+        style_image_pil = tensorToImage(style_tensor)
+        style_image_pil.save(style_image_path)
+
+        print(f"Saved content image to {content_image_path}")
+        print(f"Saved style image to {style_image_path}")
+
+        # Save the watermarked image
+        watermarked_image_path = output_path / f"watermarked.png"
+        watermarked_image_pil = tensorToImage(watermarked_image)
+        watermarked_image_pil.save(watermarked_image_path)
+
+        styled_watermarked_image_path = output_path / f"styled_watermarked.png"
+        styled_watermarked_image_pil = tensorToImage(styled_watermarked_image)
+        styled_watermarked_image_pil.save(styled_watermarked_image_path)
+
+        styled_no_watermark_path = output_path / f"styled_no_watermark.png"
+        styled_no_watermark_pil = tensorToImage(styled)
+        styled_no_watermark_pil.save(styled_no_watermark_path)
+
+        styled_extracted_watermark_path = (
+            output_path / f"styled_extracted_watermark.png"
+        )
+        styled_extracted_watermark_pil = tensorToImage(styled_extracted_watermark)
+        styled_extracted_watermark_pil.save(styled_extracted_watermark_path)
+
+        extracted_watermark_path = output_path / f"extracted_watermark.png"
+        extracted_watermark_pil = tensorToImage(extracted_watermark)
+        extracted_watermark_pil.save(extracted_watermark_path)
+
+        # Calculate the difference between styled extracted and extracted watermarks
+        extracted_comparison = torch.abs(
+            styled_extracted_watermark - extracted_watermark
+        )
+        # Save the extracted comparison image
+        extracted_comparison_path = output_path / "extracted_comparison.png"
+        extracted_comparison_pil = tensorToImage(extracted_comparison)
+        extracted_comparison_pil.save(extracted_comparison_path)
+
+        # Calculate the difference between styled and styled watermarked images
+        styled_comparison = torch.abs(styled - styled_watermarked_image)
+
+        # Save the styled comparison image
+        styled_comparison_path = output_path / "styled_comparison.png"
+        styled_comparison_pil = tensorToImage(styled_comparison)
+        styled_comparison_pil.save(styled_comparison_path)
+
+        # Save DWT alphas and DCT alpha to a file
+        alphas_file_path = output_path / "alphas.txt"
+        with open(alphas_file_path, "w") as f:
+            f.write(f"DWT Alphas: {dwt_alphas}\n")
+            f.write(f"DCT Alpha: {dct_alpha}\n")
+        print(f"Saved alpha values to {alphas_file_path}")
+
+        # Create a matplotlib figure
+        def plot_images(
+            content_image,
+            style_image,
+            watermark_image,
+            watermarked_image,
+            styled_watermarked_image,
+            extracted_watermark,
+            save_path,
+        ):
+            plt.figure(figsize=(15, 10))
+
+            # First row
+            plt.subplot(2, 3, 1)
+            plt.imshow(tensorToImage(content_image).convert("RGB"))
+            plt.title("Content Image")
+            plt.axis("off")
+
+            plt.subplot(2, 3, 2)
+            plt.imshow(tensorToImage(style_image).convert("RGB"))
+            plt.title("Style Image")
+            plt.axis("off")
+
+            plt.subplot(2, 3, 3)
+            plt.imshow(tensorToImage(watermark_image).convert("RGB"))
+            plt.title("Watermark")
+            plt.axis("off")
+
+            # Second row
+            plt.subplot(2, 3, 4)
+            plt.imshow(tensorToImage(watermarked_image).convert("RGB"))
+            plt.title("Watermarked Image")
+            plt.axis("off")
+
+            plt.subplot(2, 3, 5)
+            plt.imshow(tensorToImage(styled_watermarked_image).convert("RGB"))
+            plt.title("Styled Watermarked Image")
+            plt.axis("off")
+
+            plt.subplot(2, 3, 6)
+            plt.imshow(tensorToImage(extracted_watermark).convert("RGB"))
+            plt.title("Extracted Watermark")
+            plt.axis("off")
+
+            plt.tight_layout()
+            plt.savefig(save_path / "figure.png")
+            plt.close()
+
+            # print(f"Saved styled comparison image to {styled_comparison_path}")
+
+        # Call the function to plot the images
+        plot_images(
+            content_image=content_tensor,
+            style_image=style_tensor,
+            watermark_image=watermark,
+            watermarked_image=watermarked_image,
+            styled_watermarked_image=styled_watermarked_image,
+            extracted_watermark=styled_extracted_watermark,
+            save_path=output_path,
+        )
+
+        # get metrics and save to analysis.txt
+        (
+            pixel_diff_styled,
+            pixel_diff_extracted,
+            pixel_diff_styled_vs_watermarked,
+            psnr_styled,
+            psnr_extracted,
+            psnr_styled_vs_watermarked,
+            perceptual_diff_styled,
+            perceptual_diff_extracted,
+            perceptual_diff_styled_vs_watermarked,
+            structural_diff_styled,
+            structural_diff_extracted,
+            structural_diff_styled_vs_watermarked,
+        ) = analyse(
+            original_image=content_tensor,
+            watermarked_image=watermarked_image,
+            extracted_watermark=extracted_watermark,
+            styled_watermarked_image=styled_watermarked_image,
+            styled_extracted_watermark=styled_extracted_watermark,
+            styled=styled,
+        )
+        analysis_file_path = output_path / "analysis.txt"
+        with open(analysis_file_path, "w") as f:
+            f.write(
+                f"Pixel Difference (Watermarked vs Styled Watermarked): {pixel_diff_styled}\n"
+            )
+            f.write(f"PSNR (Watermarked vs Styled Watermarked): {psnr_styled}\n")
+            f.write(
+                f"Perceptual Difference (Watermarked vs Styled Watermarked): {perceptual_diff_styled}\n"
+            )
+            f.write(
+                f"Structural Difference (Watermarked vs Styled Watermarked): {structural_diff_styled}\n"
+            )
+            f.write("\n")
+            f.write(
+                f"Pixel Difference (Extracted vs Styled Extracted): {pixel_diff_extracted}\n"
+            )
+            f.write(f"PSNR (Extracted vs Styled Extracted): {psnr_extracted}\n")
+            f.write(
+                f"Perceptual Difference (Extracted vs Styled Extracted): {perceptual_diff_extracted}\n"
+            )
+            f.write(
+                f"Structural Difference (Extracted vs Styled Extracted): {structural_diff_extracted}\n"
+            )
+            f.write("\n")
+            f.write(
+                f"Pixel Difference (Styled vs Styled Watermarked): {pixel_diff_styled_vs_watermarked}\n"
+            )
+            f.write(
+                f"PSNR (Styled vs Styled Watermarked): {psnr_styled_vs_watermarked}\n"
+            )
+            f.write(
+                f"Perceptual Difference (Styled vs Styled Watermarked): {perceptual_diff_styled_vs_watermarked}\n"
+            )
+            f.write(
+                f"Structural Difference (Styled vs Styled Watermarked): {structural_diff_styled_vs_watermarked}\n"
+            )
+        print(f"Saved analysis results to {analysis_file_path}")
+
+        if batch_type == "watermark_resize":
+            current_watermark += 1
+
+
+batch_type = Literal[
+    "1 to 1", "random", "same style", "same content", "watermark_resize"
+]
 
 
 def batch_watermark(
     batch_type: batch_type = "random",
     style_image: Path = None,
     content_image: Path = None,
+    watermark: list[Path] = None,
     epochs: int = 25,
     count: int = 0,
     ext_path: Path = Path(""),
@@ -409,7 +651,22 @@ def batch_watermark(
     print(f"Style path: {style_path}")
     # load content and style images
 
-    watermark_tensor = preprocessImage(WATERMARK, DEVICE).to(DEVICE)
+    current_watermark = 0
+    if watermark and len(watermark) > 0:
+        assert isinstance(watermark, (list))("Watermark must be a list of images.")
+
+        images = [
+            Image.open(watermark_image).convert("RGB") for watermark_image in watermark
+        ]
+        # load tensors
+        watermark_tensor = [
+            preprocessImage(watermark_image, DEVICE).to(DEVICE)
+            for watermark_image in images
+        ]
+
+        assert watermark is not None, "Watermark not found."
+    else:
+        watermark_tensor = [preprocessImage(WATERMARK, DEVICE).to(DEVICE)]
 
     content_dataset = ImageDataset(content_path)
     style_dataset = ImageDataset(style_path)
@@ -467,9 +724,34 @@ def batch_watermark(
                 content_tensor[0] = c.unsqueeze(0)
             # Create a list where each item is the same content tensor
             content_dataloader = [content_tensor for _ in range(len(style_dataset))]
+
+        case "watermark_resize":
+            content_dataloader = DataLoader(
+                content_dataset, batch_size=1, shuffle=False
+            )
+            style_dataloader = DataLoader(style_dataset, batch_size=1, shuffle=False)
+
+            content_tensor = next(iter(content_dataloader))
+            style_tensor = next(iter(style_dataloader))
+
+            if content_image:
+                # If a specific content image is provided, use it
+                c = preprocessImage(
+                    Image.open(content_image).convert("RGB"), DEVICE
+                ).to(DEVICE)
+                content_tensor[0] = c.unsqueeze(0)
+                content_dataloader = [content_tensor for _ in range(len(style_dataset))]
+
+            if style_image:
+                # If a specific style image is provided, use it
+                s = preprocessImage(Image.open(style_image).convert("RGB"), DEVICE).to(
+                    DEVICE
+                )
+                style_tensor[0] = s.unsqueeze(0)
+
         case _:
             raise ValueError(
-                "Invalid batch type. Choose from '1 to 1', 'random', 'same style', or 'same content'."
+                "Invalid batch type. Choose from '1 to 1', 'random', 'same style', or 'same content' or 'watermark_resize'."
             )
 
     # Randomise the order of dataloaders
@@ -521,7 +803,7 @@ def batch_watermark(
             styled,
         ) = train(
             content_tensor,
-            watermark_tensor,
+            watermark_tensor[current_watermark],
             style_tensor,
             epochs=epochs,
             save_path=output_path,
@@ -707,6 +989,9 @@ def batch_watermark(
             )
         print(f"Saved analysis results to {analysis_file_path}")
 
+        if batch_type == "watermark_resize":
+            current_watermark += 1
+
         # Calculate elapsed time and estimate remaining time
         elapsed_time = time.time() - start_time
         remaining_time = elapsed_time * (total_images - (i + 1))
@@ -838,9 +1123,8 @@ def test():
     contentTensor: Tensor = preprocessImage(CONTENT_IMAGES_LIST[0], DEVICE).to(DEVICE)
     styleTensor: Tensor = preprocessImage(STYLE_IMAGES_LIST[2], DEVICE).to(DEVICE)
 
-    dwt_alphas, dct_alpha = train(
-        contentTensor, watermarkTensor, styleTensor, epochs=10
-    )
+    dwt_alphas = [0.0, 0.0, 0.0, 1.0]
+    dct_alpha = 0
 
     # perform DCT DWT watermark embedding
     [finalTensor, extracted, _, _, _, _] = embedWatermark(
@@ -860,114 +1144,25 @@ def test():
     final_image: Image = tensorToImage(finalTensor)
     final_image.save("final_tensor_image.png")
 
+    percep = perceptualDifference(finalTensor, contentTensor, True)
+
     print("Final tensor image saved as 'final_tensor_image.png'")
 
     input("Press Enter to continue...")
     return
-    print(contentTensor)
-    print(styleTensor)
-
-    # DWT DCT alpha values
-    # controls the strength of the watermark
-    # higher values = stronger / more visible watermark
-    DWTAlpha = [0.01, 0.01, 0.01, 0.01]
-    DCTAlpha = 0.01
-
-    # perform DCT DWT watermark embedding
-    [finalTensor, extracted, _, _, _, _] = embedWatermark(
-        contentTensor,
-        watermarkTensor,
-        DWT_alphas=DWTAlpha,
-        DCT_alpha=DCTAlpha,
-        display=True,
-    )
-
-    # Save the final image to a file
-    finalImage: Image = tensorToImage(finalTensor)
-    outputPath = DATA_PATH / "output" / "final_image.jpg"
-    outputPath.parent.mkdir(parents=True, exist_ok=True)
-    finalImage.save(outputPath)
-    print(f"Final image saved to {outputPath}")
-
-    pixelDiff = pixelDifference(contentTensor, finalTensor)
-    MSEDiff = MSEDifference(contentTensor, imageToTensor(finalImage))
-    perceptualDiff = perceptualDifference(contentTensor, finalTensor, True)
-    structuralDiff = structuralDifference(contentTensor, finalTensor)
-    peakNoise = PSNR(contentTensor, finalTensor)
-    print("after embedding watermark")
-
-    # amplify the differences
-    pixelDiff *= 255.0
-    pixelDiff /= DWTAlpha[0]
-    MSEDiff *= 255.0
-    print("Pixel Difference: ", pixelDiff)
-    print("MSE Difference: ", MSEDiff)
-    print("Perceptual Difference: ", perceptualDiff)
-    print("Structural Difference: ", structuralDiff)
-    print("Peak Noise: ", peakNoise)
-
-    display_image_tensors(
-        pixelDiff,
-        extracted,
-        titles=[
-            "Pixel Difference",
-            "Extracted Watermark",
-        ],
-    )
-
-    input("Press Enter to continue...")
-    # Perform Neural Style Transfer (NST)
-    styled = performNST(
-        finalTensor.to(DEVICE, torch.float),
-        styleTensor.to(DEVICE, torch.float),
-        iterations=200,
-    )
-    display_image_tensors(styled, titles=["Styled Tensor"])
-
-    NSTPerceptualDiff = perceptualDifference(
-        finalTensor.cpu(),
-        styled.cpu(),
-        True,
-    )
-
-    NSTDWTExtractedWatermark = extract_watermark_dwt(
-        contentTensor.cpu(),
-        styled.cpu(),
-        alphas=DWTAlpha,
-    )
-    NSTDCTExtractedWatermark = extract_watermark_dct(
-        contentTensor.cpu(),
-        styled.cpu(),
-        alpha=0.0001,
-    )
-
-    pixelDiffStyledFinal = pixelDifference(styled.cpu(), finalTensor.cpu())
-
-    display_image_tensors(
-        NSTDCTExtractedWatermark,
-        NSTDWTExtractedWatermark,
-        pixelDiffStyledFinal,
-        titles=[
-            "DCT Extracted Watermark after NST",
-            "DWT Extracted Watermark after NST",
-            "Pixel Difference: Styled vs Final",
-        ],
-    )
-    print("NST Perceptual Difference: ", NSTPerceptualDiff)
-
-    input("Press Enter to Close...")
 
 
 if __name__ == "__main__":
-    # test()
-    batch_watermark(
-        batch_type="same content",
-        content_image=Path(DATA_PATH / "lena.jpg"),
-        ext_path=Path("lena"),
-        epochs=10,
-        count=50,
-    )
 
-    batch_watermark(batch_type="same style", epochs=25, count=10)
-    batch_watermark(batch_type="same content", epochs=25, count=10)
-    batch_watermark(batch_type="random", epochs=25, count=10)
+    test()
+    # batch_watermark(
+    #     batch_type="same content",
+    #     content_image=Path(DATA_PATH / "lena.jpg"),
+    #     ext_path=Path("lena"),
+    #     epochs=10,
+    #     count=50,
+    # )
+
+    # batch_watermark(batch_type="same style", epochs=25, count=10)
+    # batch_watermark(batch_type="same content", epochs=25, count=10)
+    # batch_watermark(batch_type="random", epochs=25, count=10)
