@@ -1123,8 +1123,8 @@ def test():
     contentTensor: Tensor = preprocessImage(CONTENT_IMAGES_LIST[0], DEVICE).to(DEVICE)
     styleTensor: Tensor = preprocessImage(STYLE_IMAGES_LIST[2], DEVICE).to(DEVICE)
 
-    dwt_alphas = [0.0, 0.0, 0.0, 1.0]
-    dct_alpha = 0
+    dwt_alphas = [0.1, 0.1, 0.1, 0.1]
+    dct_alpha = 0.1
 
     # perform DCT DWT watermark embedding
     [finalTensor, extracted, _, _, _, _] = embedWatermark(

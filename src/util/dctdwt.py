@@ -7,6 +7,7 @@ import torch
 
 # from pywt import dwt2, idwt2
 import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
 
 
 dwt2 = DWT2D(wave="haar", mode="zero", J=3).cuda()
@@ -418,8 +419,38 @@ def embed_watermark_dwt(
 
     # Apply DWT to both image and watermark
     yl_image, yh_image = dwt2(image)
+
+    import matplotlib.pyplot as plt
+
+    def display_dwt_coefficients(yl: Tensor, yh: list[Tensor]) -> None:
+        """
+        Display the DWT coefficients (LL, LH, HL, HH) using matplotlib.
+
+        :param yl: Low-frequency (LL) coefficients tensor.
+        :param yh: List of high-frequency coefficients tensors (LH, HL, HH).
+        """
+        # Display LL coefficients
+        plt.figure(figsize=(12, 8))
+        plt.subplot(2, 2, 1)
+        plt.imshow(yl[0, 0].cpu().detach().numpy(), cmap="gray")
+        # plt.title("LL Coefficients")
+        plt.axis("off")
+
+        # Display LH, HL, HH coefficients
+        for i, (title, coeff) in enumerate(
+            zip(["LH", "HL", "HH"], yh[0].unbind(dim=2))
+        ):
+            plt.subplot(2, 2, i + 2)
+            plt.imshow(coeff[0, 0].cpu().detach().numpy(), cmap="gray")
+            # plt.title(f"{title} Coefficients")
+            plt.axis("off")
+
+        plt.tight_layout()
+        plt.show()
+
     yl_watermark, yh_watermark = dwt2(watermark)
 
+    display_dwt_coefficients(yl_image, yh_image)
     # Debug prints
     # print(f"Image LL shape: {yl_image.shape}")
     # print(f"Watermark LL shape: {yl_watermark.shape}")
@@ -503,6 +534,26 @@ def embed_watermark_dct(image: Tensor, watermark: Tensor, alpha: Tensor) -> Tens
 
     image_dct = dct(image)
     watermark_dct = dct(watermark)
+
+    def display_dct_coefficients(dct_coeffs: Tensor) -> None:
+        """
+        Display the DCT coefficients using matplotlib.
+
+        :param dct_coeffs: DCT coefficients tensor.
+        """
+        # Convert to numpy for visualization
+        dct_numpy = dct_coeffs[0, 0].cpu().detach().numpy()
+
+        # Display the DCT coefficients
+        plt.figure(figsize=(8, 6))
+        plt.imshow(dct_numpy, cmap="gray")
+        plt.title("DCT Coefficients")
+        plt.axis("off")
+        plt.colorbar()
+        plt.show()
+
+    # Call the function to display DCT coefficients
+    display_dct_coefficients(image_dct)
 
     # Embed watermark
     watermarked_dct = image_dct + alpha_float * watermark_dct
