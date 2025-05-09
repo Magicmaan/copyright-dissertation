@@ -1,4 +1,4 @@
-always use camelCase for variables and functions. if its a class then use CapitalCase i.e. (class FooBar)
+always use snake_case for variables and functions. if its a class then use CapitalCase i.e. (class FooBar)
 
 always try to define types and return type for functions. and ensure asserts to ensure the variable exists.
 
