@@ -1,12 +1,30 @@
 # copyright-dissertation
- 
-### Data Preparation
 
+### Installation
 
+To set up the project, follow these steps:
 
+1. **Create a virtual environment**:
+    ```bash
+    python -m venv venv
+    ```
 
-## Process
-1. Get Image and watermark
-2. Perform DCT watermark https://ieeexplore.ieee.org/document/9073104
+2. **Activate the virtual environment**:
+    - On Windows:
+      ```bash
+      .\venv\Scripts\activate
+      ```
+    - On macOS/Linux:
+      ```bash
+      source venv/bin/activate
+      ```
 
-### Pseudo Code
+3. **Install dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4. **Generate `requirements.txt` (if not already present)**:
+    ```bash
+    pip freeze > requirements.txt
+    ```
