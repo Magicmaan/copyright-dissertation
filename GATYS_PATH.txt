@@ -1,1 +1,1 @@
-E:/theob/Documents/PythonProjects/Neural-Style-Transfer/neural_transfer
+path/to/Neural-Style-Transfer/neural_transfer
